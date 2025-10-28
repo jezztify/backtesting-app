@@ -36,6 +36,61 @@ const TradingPanel: React.FC<Props> = ({ currentPrice }) => {
     const updateMarketPrice = useTradingStore((s) => s.updateMarketPrice);
 
     const [collapsed, setCollapsed] = useState<boolean>(false);
+    const STORAGE_KEY = 'tradingPanelHeight';
+    const defaultHeight = 360;
+    const minHeight = 120;
+    const maxHeight = 900;
+    const [height, setHeight] = useState<number>(() => {
+        try {
+            const raw = typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) : null;
+            return raw ? Number(raw) : defaultHeight;
+        } catch (e) {
+            return defaultHeight;
+        }
+    });
+    const resizingRef = React.useRef<{ startY: number; startHeight: number } | null>(null);
+
+    const startResize = (clientY: number) => {
+        resizingRef.current = { startY: clientY, startHeight: height };
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+        window.addEventListener('touchmove', onTouchMove as any, { passive: false });
+        window.addEventListener('touchend', onTouchEnd as any);
+    };
+
+    const stopResize = () => {
+        resizingRef.current = null;
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+        window.removeEventListener('touchmove', onTouchMove as any);
+        window.removeEventListener('touchend', onTouchEnd as any);
+        try {
+            window.localStorage.setItem(STORAGE_KEY, String(height));
+        } catch (e) {
+            // ignore
+        }
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+        if (!resizingRef.current) return;
+        const delta = e.clientY - resizingRef.current.startY;
+        const next = Math.max(minHeight, Math.min(maxHeight, resizingRef.current.startHeight + delta));
+        setHeight(next);
+    };
+
+    const onMouseUp = () => stopResize();
+
+    const onTouchMove = (e: TouchEvent) => {
+        if (!resizingRef.current) return;
+        if (e.touches && e.touches[0]) {
+            const delta = e.touches[0].clientY - resizingRef.current.startY;
+            const next = Math.max(minHeight, Math.min(maxHeight, resizingRef.current.startHeight + delta));
+            setHeight(next);
+            e.preventDefault();
+        }
+    };
+
+    const onTouchEnd = () => stopResize();
     const [activeTab, setActiveTab] = useState<'summary' | 'positions' | 'history'>('summary');
 
     useEffect(() => {
@@ -58,13 +113,35 @@ const TradingPanel: React.FC<Props> = ({ currentPrice }) => {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 10, cursor: 'pointer' }} onClick={() => setCollapsed((c) => !c)}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <strong>Trading Panel</strong>
-                    <span style={{ color: '#6b7280', fontSize: 12 }}>{collapsed ? '▲' : '▼'}</span>
                 </div>
-                <div style={{ fontSize: 12, color: '#374151' }}>{collapsed ? '▸' : '▾'}</div>
+
+                {/* center compact summary when collapsed */}
+                {collapsed && (
+                    <div style={{ display: 'flex', gap: 14, alignItems: 'center', justifyContent: 'center', flex: 1 }}>
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: 11, color: '#6b7280' }}>Start</div>
+                            <div style={{ fontWeight: 700, fontSize: 12 }}>${format(startingBalance)}</div>
+                        </div>
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: 11, color: '#6b7280' }}>Equity</div>
+                            <div style={{ fontWeight: 700, fontSize: 12 }}>${format(equity)}</div>
+                        </div>
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: 11, color: '#6b7280' }}>Realized</div>
+                            <div style={{ fontWeight: 700, fontSize: 12 }}>${format(realizedPnl)}</div>
+                        </div>
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: 11, color: '#6b7280' }}>Unrealized</div>
+                            <div style={{ fontWeight: 700, fontSize: 12 }}>${format(unrealizedPnl)}</div>
+                        </div>
+                    </div>
+                )}
+
+                <div style={{ fontSize: 12, color: '#374151' }}>{collapsed ? '▲' : '▼'}</div>
             </div>
 
             {!collapsed && (
-                <div style={{ padding: 12 }}>
+                <div style={{ padding: 12, height, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
 
                     <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
                         <div style={{ flex: 1 }}>
@@ -108,7 +185,7 @@ const TradingPanel: React.FC<Props> = ({ currentPrice }) => {
                         />
                     </div>
 
-                    <div>
+                    <div style={{ flex: 1 }}>
                         {activeTab === 'summary' && (
                             <div style={{ color: '#6b7280', fontSize: 13 }}>Account summary is shown above. Use Positions or History to view trades.</div>
                         )}
@@ -149,6 +226,16 @@ const TradingPanel: React.FC<Props> = ({ currentPrice }) => {
                                 </div>
                             </div>
                         )}
+                    </div>
+
+                    {/* resizer */}
+                    <div
+                        onMouseDown={(e) => startResize(e.clientY)}
+                        onTouchStart={(e) => startResize(e.touches[0].clientY)}
+                        style={{ height: 10, cursor: 'row-resize', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        title="Drag to resize"
+                    >
+                        <div style={{ width: 40, height: 4, borderRadius: 2, background: '#e5e7eb' }} />
                     </div>
                 </div>
             )}
