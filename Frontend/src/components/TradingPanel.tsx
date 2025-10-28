@@ -56,8 +56,19 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
     const cancelOrder = useTradingStore((s) => (s as any).cancelOrder as ((id: string) => void));
     const updateMarketPrice = useTradingStore((s) => s.updateMarketPrice);
     const resetAccountStore = useTradingStore((s) => s.reset);
+    const leverage = useTradingStore((s) => (s as any).leverage as number);
+    const setLeverage = useTradingStore((s) => (s as any).setLeverage as (n: number) => void);
+    const setStartingBalance = useTradingStore((s) => s.setStartingBalance);
 
     const [collapsed, setCollapsed] = useState<boolean>(false);
+    const [showAccountOptions, setShowAccountOptions] = useState<boolean>(false);
+    const [tempStartingBalance, setTempStartingBalance] = useState<number>(startingBalance);
+    const [tempLeverage, setTempLeverage] = useState<number>(leverage || 1);
+
+    useEffect(() => {
+        setTempStartingBalance(startingBalance);
+        setTempLeverage(leverage || 1);
+    }, [startingBalance, leverage]);
     const STORAGE_KEY = 'tradingPanelHeight';
     const defaultHeight = 360;
     const minHeight = 120;
@@ -241,6 +252,16 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
+                            setShowAccountOptions((s) => !s);
+                        }}
+                        title="Account options"
+                        style={{ padding: '6px 8px', borderRadius: 6, background: '#fff', border: '1px solid #d1d5db', color: '#111827', cursor: 'pointer' }}
+                    >
+                        Account Options
+                    </button>
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
                             try {
                                 const ok = typeof window !== 'undefined' ? window.confirm('Reset account? This will clear positions, orders, history and reset balances to starting values.') : false;
                                 if (ok) handleResetAccount();
@@ -282,6 +303,59 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
 
                     {/* Long/Short buttons removed per request */}
 
+                    {showAccountOptions && (
+                        <div style={{ marginBottom: 12, background: '#fff', padding: 10, borderRadius: 8, border: '1px solid #e5e7eb' }} onClick={(e) => e.stopPropagation()}>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{ fontSize: 12, color: '#6b7280' }}>Starting Balance</label>
+                                    <input
+                                        type="number"
+                                        value={tempStartingBalance}
+                                        onChange={(e) => setTempStartingBalance(Number(e.target.value))}
+                                        style={{ width: '100%', padding: '6px 8px', marginTop: 6, borderRadius: 6, border: '1px solid #e5e7eb' }}
+                                    />
+                                </div>
+                                <div style={{ width: 140 }}>
+                                    <label style={{ fontSize: 12, color: '#6b7280' }}>Leverage</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        step={0.1}
+                                        value={tempLeverage}
+                                        onChange={(e) => setTempLeverage(Number(e.target.value))}
+                                        style={{ width: '100%', padding: '6px 8px', marginTop: 6, borderRadius: 6, border: '1px solid #e5e7eb' }}
+                                    />
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        // apply changes to store
+                                        if (!Number.isFinite(tempStartingBalance) || tempStartingBalance <= 0) return;
+                                        setStartingBalance(tempStartingBalance);
+                                        setLeverage(Math.max(1, tempLeverage));
+                                        setShowAccountOptions(false);
+                                    }}
+                                    style={{ padding: '6px 10px', borderRadius: 6, background: '#111827', color: '#fff', border: 'none', cursor: 'pointer' }}
+                                >
+                                    Save
+                                </button>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        // reset temp to current values and close
+                                        setTempStartingBalance(startingBalance);
+                                        setTempLeverage(leverage || 1);
+                                        setShowAccountOptions(false);
+                                    }}
+                                    style={{ padding: '6px 10px', borderRadius: 6, background: 'transparent', color: '#111827', border: '1px solid #e5e7eb', cursor: 'pointer' }}
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     {/* Starting balance setter removed from UI per request */}
 
                     {/* Styled tabs */}

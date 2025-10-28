@@ -12,6 +12,7 @@ interface TradingState extends AccountState {
     positions: Position[];
     history: ClosedTrade[];
     setStartingBalance: (amount: number) => void;
+    setLeverage: (lev: number) => void;
     openMarketPosition: (side: PositionSide, size: number, price: number, opts?: { stopLoss?: number; takeProfit?: number }) => string;
     placeLimitOrder: (side: PositionSide, size: number, price: number, opts?: { stopLoss?: number; takeProfit?: number; drawingId?: string }) => string;
     cancelOrder: (positionId: string) => void;
@@ -26,10 +27,12 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     realizedPnl: 0,
     unrealizedPnl: 0,
     equity: 10000,
+    leverage: 1,
     positions: [],
     history: [],
     setStartingBalance: (amount: number) =>
         set(() => ({ startingBalance: amount, balance: amount, realizedPnl: 0, unrealizedPnl: 0, equity: amount })),
+    setLeverage: (lev: number) => set(() => ({ leverage: lev })),
     openMarketPosition: (side, size, price, opts) => {
         const id = generateId();
         const position: Position = {
@@ -190,7 +193,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
         const equity = get().balance + unrealized;
         set({ unrealizedPnl: unrealized, equity });
     },
-    reset: () => set((_) => ({ positions: [], history: [], startingBalance: 10000, balance: 10000, realizedPnl: 0, unrealizedPnl: 0, equity: 10000 })),
+    reset: () => set((_) => ({ positions: [], history: [], startingBalance: 10000, balance: 10000, realizedPnl: 0, unrealizedPnl: 0, equity: 10000, leverage: 1 })),
 }));
 
 function computePnlForPosition(pos: Position, price: number) {
