@@ -41,6 +41,8 @@ export interface PositionStyle extends DrawingStyle {
   takeProfitFillOpacity: number;
   stopLossFillColor: string;
   stopLossFillOpacity: number;
+  // When true, render the computed Risk/Reward ratio on the chart as part of the position drawing
+  showRiskReward?: boolean;
 }
 
 export interface PositionDrawing {

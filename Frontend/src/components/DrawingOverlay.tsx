@@ -1191,6 +1191,28 @@ const DrawingOverlay = ({ width, height, converters, renderTick, panHandlers }: 
                 {isLong ? 'LONG' : 'SHORT'} Entry: {drawing.point.price.toFixed(5)}
               </text>
 
+              {/* Risk/Reward label on-chart (if enabled) */}
+              {drawing.style.showRiskReward && drawing.takeProfit !== undefined && drawing.stopLoss !== undefined && drawing.point.price !== undefined && (
+                (() => {
+                  const rr = Math.abs((drawing.takeProfit - drawing.point.price)) / Math.abs((drawing.point.price - drawing.stopLoss));
+                  if (!Number.isFinite(rr) || rr <= 0) return null;
+                  const rrText = `${rr.toFixed(2)}:1`;
+                  // Place the R/R label at the right side of the rectangle, near the entry line
+                  return (
+                    <text
+                      x={lineEndX - 6}
+                      y={entryY + (isLong ? -5 : 15)}
+                      fill={color}
+                      fontSize="12"
+                      fontWeight="600"
+                      textAnchor="end"
+                    >
+                      R/R {rrText}
+                    </text>
+                  );
+                })()
+              )}
+
               {/* Selection handles - corners like rectangle */}
               {selectionId === drawing.id && (
                 (() => {

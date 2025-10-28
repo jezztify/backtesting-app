@@ -31,6 +31,7 @@ export const defaultLongStyle = {
   takeProfitFillOpacity: 0.15,
   stopLossFillColor: '#f44336',
   stopLossFillOpacity: 0.15,
+  showRiskReward: false,
 };
 
 export const defaultShortStyle = {
@@ -40,6 +41,7 @@ export const defaultShortStyle = {
   takeProfitFillOpacity: 0.15,
   stopLossFillColor: '#f44336',
   stopLossFillOpacity: 0.15,
+  showRiskReward: false,
 };
 
 const generateId = (): string => {

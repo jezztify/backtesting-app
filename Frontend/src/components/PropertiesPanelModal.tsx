@@ -481,6 +481,16 @@ const PropertiesPanelModal = ({ drawingId, onClose, onDragStart }: PropertiesPan
                             </span>
                         </div>
                     )}
+                    {/* Toggle to render R/R on the chart for this position */}
+                    <label style={{ ...checkboxLabelStyle, marginTop: 8 }}>
+                        <input
+                            type="checkbox"
+                            checked={!!position.style.showRiskReward}
+                            onChange={(e) => updatePositionStyle(position.id, { showRiskReward: e.target.checked })}
+                            style={checkboxStyle}
+                        />
+                        <span>Show Risk/Reward on chart</span>
+                    </label>
                     <button
                         style={{ marginTop: 12, background: 'var(--color-button-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '0.5rem', fontWeight: 500, cursor: 'pointer' }}
                         onClick={handleResetPositionStyle}
