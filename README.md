@@ -142,7 +142,7 @@ Contributions welcome — open issues or PRs. Keep changes small and focused. Ad
 
 ## License
 
-See `Frontend/LICENSE` for the license used by the frontend scaffolding.
+See `LICENSE` for the license used by the frontend scaffolding.
 
 ---
 
