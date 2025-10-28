@@ -333,6 +333,8 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                                         e.stopPropagation();
                                         // apply changes to store
                                         if (!Number.isFinite(tempStartingBalance) || tempStartingBalance <= 0) return;
+                                        // validate leverage input to avoid saving NaN/Infinity or values < 1
+                                        if (!Number.isFinite(tempLeverage) || tempLeverage < 1) return;
                                         setStartingBalance(tempStartingBalance);
                                         setLeverage(Math.max(1, tempLeverage));
                                         setShowAccountOptions(false);

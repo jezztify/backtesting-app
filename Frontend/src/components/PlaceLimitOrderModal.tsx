@@ -30,12 +30,14 @@ const PlaceLimitOrderModal: React.FC<Props> = ({ drawing, equity, pricePrecision
     const tp = drawing.takeProfit;
     const unitRisk = sl !== undefined ? Math.abs(entry - sl) : 0;
 
+    // If risk % is specified, compute a suggested size from equity and unit risk.
     let suggestedSizeFromRisk = size;
     if (unitRisk > 0 && riskPercent > 0) {
         suggestedSizeFromRisk = Math.max(0, (equity * (riskPercent / 100)) / unitRisk);
     }
 
-    const computedSize = size != null ? size : suggestedSizeFromRisk;
+    // `size` is always a number (initialized from props/state). Use it directly as the computed size.
+    const computedSize = size;
     const dollarRisk = unitRisk > 0 ? unitRisk * computedSize : 0;
     const dollarReward = tp !== undefined ? Math.abs(tp - entry) * computedSize : 0;
 

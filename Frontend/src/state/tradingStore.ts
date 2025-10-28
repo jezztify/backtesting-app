@@ -32,7 +32,11 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     history: [],
     setStartingBalance: (amount: number) =>
         set(() => ({ startingBalance: amount, balance: amount, realizedPnl: 0, unrealizedPnl: 0, equity: amount })),
-    setLeverage: (lev: number) => set(() => ({ leverage: lev })),
+    setLeverage: (lev: number) => {
+        // ensure leverage is a finite number and at least 1
+        const v = Number.isFinite(lev) ? lev : 1;
+        return set(() => ({ leverage: Math.max(1, v) }));
+    },
     openMarketPosition: (side, size, price, opts) => {
         const id = generateId();
         const position: Position = {
