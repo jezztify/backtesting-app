@@ -18,10 +18,7 @@ const TradingPanel: React.FC<Props> = ({ currentPrice }) => {
     const openMarketPosition = useTradingStore((s) => s.openMarketPosition);
     const closePosition = useTradingStore((s) => s.closePosition);
     const updateMarketPrice = useTradingStore((s) => s.updateMarketPrice);
-    const setStartingBalance = useTradingStore((s) => s.setStartingBalance);
 
-    const [size, setSize] = useState<number>(1000);
-    const [localStartingBalance, setLocalStartingBalance] = useState<number>(startingBalance);
     const [collapsed, setCollapsed] = useState<boolean>(false);
 
     useEffect(() => {
@@ -30,27 +27,21 @@ const TradingPanel: React.FC<Props> = ({ currentPrice }) => {
         }
     }, [currentPrice, updateMarketPrice]);
 
-    const handleOpen = (side: 'long' | 'short') => {
-        if (typeof currentPrice !== 'number' || size <= 0) return;
-        openMarketPosition(side, size, currentPrice);
-    };
+    // trading open handlers removed — buttons were removed from the UI per request
 
     const handleClose = (id: string) => {
         if (typeof currentPrice !== 'number') return;
         closePosition(id, currentPrice);
     };
 
-    const applyStartingBalance = () => {
-        if (localStartingBalance <= 0) return;
-        setStartingBalance(localStartingBalance);
-    };
+
 
     return (
         <div style={{ borderRadius: 8, background: '#fafafa', border: '1px solid #e5e7eb' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 10, cursor: 'pointer' }} onClick={() => setCollapsed((c) => !c)}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <strong>Trading Panel</strong>
-                    <span style={{ color: '#6b7280', fontSize: 12 }}>{collapsed ? 'collapsed' : 'expanded'}</span>
+                    <span style={{ color: '#6b7280', fontSize: 12 }}>{collapsed ? '▲' : '▼'}</span>
                 </div>
                 <div style={{ fontSize: 12, color: '#374151' }}>{collapsed ? '▸' : '▾'}</div>
             </div>
@@ -58,7 +49,7 @@ const TradingPanel: React.FC<Props> = ({ currentPrice }) => {
             {!collapsed && (
                 <div style={{ padding: 12 }}>
 
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
                         <div style={{ flex: 1 }}>
                             <label style={{ fontSize: 12 }}>Starting</label>
                             <div style={{ fontWeight: 700 }}>${format(startingBalance)}</div>
@@ -67,9 +58,6 @@ const TradingPanel: React.FC<Props> = ({ currentPrice }) => {
                             <label style={{ fontSize: 12 }}>Equity</label>
                             <div style={{ fontWeight: 700 }}>${format(equity)}</div>
                         </div>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                         <div style={{ flex: 1 }}>
                             <label style={{ fontSize: 12 }}>Realized P&L</label>
                             <div style={{ fontWeight: 700 }}>${format(realizedPnl)}</div>
@@ -80,24 +68,9 @@ const TradingPanel: React.FC<Props> = ({ currentPrice }) => {
                         </div>
                     </div>
 
-                    <div style={{ marginBottom: 8 }}>
-                        <label style={{ fontSize: 12 }}>Market price</label>
-                        <div style={{ fontWeight: 700 }}>{typeof currentPrice === 'number' ? format(currentPrice) : '—'}</div>
-                    </div>
+                    {/* Long/Short buttons removed per request */}
 
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                        <input type="number" value={size} onChange={(e) => setSize(Number(e.target.value))} style={{ flex: 1, padding: 6 }} />
-                        <button onClick={() => handleOpen('long')} style={{ padding: '6px 8px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 6 }}>Long</button>
-                        <button onClick={() => handleOpen('short')} style={{ padding: '6px 8px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6 }}>Short</button>
-                    </div>
-
-                    <div style={{ marginBottom: 8 }}>
-                        <label style={{ fontSize: 12 }}>Set starting balance</label>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                            <input type="number" value={localStartingBalance} onChange={(e) => setLocalStartingBalance(Number(e.target.value))} style={{ flex: 1, padding: 6 }} />
-                            <button onClick={applyStartingBalance} style={{ padding: '6px 8px' }}>Apply</button>
-                        </div>
-                    </div>
+                    {/* Starting balance setter removed from UI per request */}
 
                     <hr />
 
