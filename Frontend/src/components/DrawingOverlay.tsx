@@ -262,7 +262,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
   const [interaction, setInteraction] = useState<InteractionState>({ type: 'idle' });
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; drawingId: string } | null>(null);
   const [showPropertiesModal, setShowPropertiesModal] = useState<{ drawingId: string; x: number; y: number } | null>(null);
-  const [showTradeModal, setShowTradeModal] = useState<{ drawingId: string; x: number; y: number; size: number } | null>(null);
+  const [showTradeModal, setShowTradeModal] = useState<{ drawingId: string; x: number; y: number; size: number; riskPercent?: number } | null>(null);
   const [modalDragging, setModalDragging] = useState<{ offsetX: number; offsetY: number } | null>(null);
 
   const {
@@ -298,6 +298,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
   const cancelOrder = useTradingStore((s) => s.cancelOrder);
   // subscribe to positions so we can lock drawings that have an associated order
   const tradingPositions = useTradingStore((s) => s.positions);
+  const equity = useTradingStore((s) => s.equity);
   const lockedDrawingIds = useMemo(() => new Set(tradingPositions.filter((p) => !!p.drawingId).map((p) => p.drawingId!)), [tradingPositions]);
 
   const canvasDrawings = useMemo(() => {
@@ -771,12 +772,13 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
       setShowPropertiesModal({ drawingId: contextMenu.drawingId, x, y });
       setContextMenu(null);
     } else if ((action === 'trade' || action === 'createOrder') && contextMenu) {
-      // Open small trade modal to confirm size before placing a limit order
-      const modalWidth = 260;
-      const modalHeight = 140;
+      // Open trade modal to confirm size before placing a limit order
+      // Increase modal size so full form fits without clipping
+      const modalWidth = 340;
+      const modalHeight = 320;
       const x2 = Math.max(0, Math.min(width - modalWidth, contextMenu.x + 10));
       const y2 = Math.max(0, Math.min(height - modalHeight, contextMenu.y - 50));
-      setShowTradeModal({ drawingId: contextMenu.drawingId, x: x2, y: y2, size: 1 });
+      setShowTradeModal({ drawingId: contextMenu.drawingId, x: x2, y: y2, size: 1, riskPercent: 0.5 });
       setContextMenu(null);
     } else {
       setContextMenu(null);
@@ -1654,44 +1656,128 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
       {/* Trade Modal */}
       {showTradeModal && (
         <foreignObject
-          x={showTradeModal.x}
-          y={showTradeModal.y}
-          width={260}
-          height={140}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div style={{
-            background: 'var(--color-panel)',
-            color: 'var(--color-text)',
-            border: '1px solid var(--color-border-strong)',
-            borderRadius: 8,
-            padding: 12,
-            width: '100%',
-            boxSizing: 'border-box',
-            pointerEvents: 'auto',
-            fontFamily: 'system-ui, -apple-system, sans-serif'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <strong style={{ fontSize: 14 }}>Place Limit Order</strong>
-              <button onClick={() => setShowTradeModal(null)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>×</button>
-            </div>
-            <div style={{ marginBottom: 8 }}>
-              <label style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Size</label>
-              <input
-                type="number"
-                min={0.001}
-                step={0.001}
-                value={showTradeModal.size}
-                onChange={(e) => setShowTradeModal({ ...showTradeModal, size: Number(e.target.value) })}
-                style={{ width: '100%', padding: 8, boxSizing: 'border-box', marginTop: 6 }}
-              />
-            </div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button onClick={handleCancelTrade} style={{ padding: '8px 12px', background: 'var(--color-button-bg)', border: '1px solid var(--color-border)', borderRadius: 6 }}>Cancel</button>
-              <button onClick={() => handleConfirmTrade(showTradeModal.size)} style={{ padding: '8px 12px', background: 'var(--color-accent)', color: 'var(--color-text-inverse)', border: 'none', borderRadius: 6 }}>Place</button>
-            </div>
-          </div>
+            x={showTradeModal.x}
+            y={showTradeModal.y}
+            width={340}
+            height={320}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{
+                  background: 'var(--color-panel)',
+                  color: 'var(--color-text)',
+                  border: '1px solid var(--color-border-strong)',
+                  borderRadius: 8,
+                  padding: 12,
+                  width: '100%',
+                  height: '100%',
+                  boxSizing: 'border-box',
+                  pointerEvents: 'auto',
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                  overflowY: 'auto'
+                }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <strong style={{ fontSize: 14 }}>Place Limit Order</strong>
+                  <button onClick={() => setShowTradeModal(null)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>×</button>
+                </div>
+                {/* Fetch drawing details for display/calculation */}
+                {(() => {
+                  const drawing = drawings.find((d) => d.id === showTradeModal.drawingId);
+                  if (!drawing || (drawing.type !== 'long' && drawing.type !== 'short')) {
+                    return <div style={{ color: 'var(--color-text-muted)' }}>Drawing not found or not a position.</div>;
+                  }
+                  const pos = drawing as PositionDrawing;
+                  const entry = pos.point.price;
+                  const sl = pos.stopLoss;
+                  const tp = pos.takeProfit;
+                  const unitRisk = sl !== undefined ? Math.abs(entry - sl) : 0;
+
+                  // compute size from riskPercent if requested
+                  const riskPercent = (showTradeModal.riskPercent ?? 0) as number;
+                  let suggestedSizeFromRisk = showTradeModal.size;
+                  if (unitRisk > 0 && riskPercent > 0) {
+                    suggestedSizeFromRisk = Math.max(0, (equity * (riskPercent / 100)) / unitRisk);
+                  }
+
+                  const size = showTradeModal.size != null ? showTradeModal.size : suggestedSizeFromRisk;
+                  const dollarRisk = unitRisk > 0 ? unitRisk * size : 0;
+                  const dollarReward = tp !== undefined ? Math.abs(tp - entry) * size : 0;
+
+                  return (
+                    <div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                        <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                          <div>Entry</div>
+                          <div style={{ fontWeight: 700 }}>{entry.toFixed(pricePrecision)}</div>
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                          <div>Stop Loss</div>
+                          <div style={{ fontWeight: 700 }}>{sl !== undefined ? sl.toFixed(pricePrecision) : 'n/a'}</div>
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                          <div>Take Profit</div>
+                          <div style={{ fontWeight: 700 }}>{tp !== undefined ? tp.toFixed(pricePrecision) : 'n/a'}</div>
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                          <div>Equity</div>
+                          <div style={{ fontWeight: 700 }}>${equity.toFixed(2)}</div>
+                        </div>
+                      </div>
+
+                      <div style={{ marginBottom: 8 }}>
+                        <label style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)' }}>Risk % of Equity</label>
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.1}
+                          value={showTradeModal.riskPercent}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setShowTradeModal({ ...showTradeModal, riskPercent: isNaN(val) ? 0 : val });
+                            // If unitRisk present, update size to reflect new risk percent
+                            if (unitRisk > 0 && !isNaN(val) && val > 0) {
+                              const computed = Math.max(0, (equity * (val / 100)) / unitRisk);
+                              setShowTradeModal((prev) => ({ ...prev!, size: computed, riskPercent: val }));
+                            }
+                          }}
+                          style={{ width: '100%', padding: 8, boxSizing: 'border-box', marginTop: 6 }}
+                        />
+                      </div>
+
+                      <div style={{ marginBottom: 8 }}>
+                        <label style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)' }}>Size</label>
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.0001}
+                          value={size}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setShowTradeModal({ ...showTradeModal, size: isNaN(val) ? 0 : val });
+                          }}
+                          style={{ width: '100%', padding: 8, boxSizing: 'border-box', marginTop: 6 }}
+                        />
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', marginBottom: 8 }}>
+                        <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                          <div>Risk ($)</div>
+                          <div style={{ fontWeight: 700 }}>${dollarRisk.toFixed(2)}</div>
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                          <div>Reward ($)</div>
+                          <div style={{ fontWeight: 700 }}>${dollarReward.toFixed(2)}</div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                        <button onClick={handleCancelTrade} style={{ padding: '8px 12px', background: 'var(--color-button-bg)', border: '1px solid var(--color-border)', borderRadius: 6 }}>Cancel</button>
+                        <button onClick={() => handleConfirmTrade(size)} style={{ padding: '8px 12px', background: 'var(--color-accent)', color: 'var(--color-text-inverse)', border: 'none', borderRadius: 6 }}>Place</button>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
         </foreignObject>
       )}
     </svg>
