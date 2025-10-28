@@ -33,4 +33,6 @@ export interface AccountState {
     realizedPnl: number;
     unrealizedPnl: number;
     equity: number; // balance + unrealized
+    // Leverage multiplier (1 = no leverage)
+    leverage: number;
 }
