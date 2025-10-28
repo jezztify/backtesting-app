@@ -10,89 +10,14 @@ import {
 } from 'lightweight-charts';
 import { MutableRefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import DrawingOverlay from './DrawingOverlay';
+import { determinePriceFormat } from '../utils/format';
 import { useCanvasStore } from '../state/canvasStore';
 import { Candle, Timeframe } from '../types/series';
 import { aggregateTicksUpToIndex } from '../utils/tickPlayback';
 import { ChartPoint } from '../types/drawings';
 import { getTimeframeConfig, getTimeframePadding, getBarIntervalSeconds, getTimeframeMultiplier } from '../utils/timeframe';
 
-const MAX_PRICE_PRECISION = 8;
-const PRECISION_TOLERANCE = 1e-8;
-
-const computeValuePrecision = (value: number): number => {
-  const formatNumberToPrecision = (value: number, precision: number): number => {
-    const factor = Math.pow(10, precision);
-    return Math.round(value * factor) / factor;
-  };
-  if (!Number.isFinite(value)) {
-    return 0;
-  }
-
-  let precision = 0;
-  while (precision < MAX_PRICE_PRECISION) {
-    const scaled = value * Math.pow(10, precision);
-    if (Math.abs(Math.round(scaled) - scaled) < PRECISION_TOLERANCE) {
-      return precision;
-    }
-    precision += 1;
-  }
-  return MAX_PRICE_PRECISION;
-}
-
-const formatNumberToPrecision = (value: number, precision: number): number => {
-  const factor = Math.pow(10, precision);
-  return Math.round(value * factor) / factor;
-};
-
-const determinePriceFormat = (candles: Candle[]) => {
-  if (!candles.length) {
-    return {
-      type: 'price' as const,
-      precision: 2,
-      minMove: 0.01,
-    };
-  }
-
-  let maxPrecision = 0;
-  const uniqueValues = new Set<number>();
-
-  candles.forEach((candle) => {
-    [candle.open, candle.high, candle.low, candle.close].forEach((value) => {
-      if (!Number.isFinite(value)) {
-        return;
-      }
-      uniqueValues.add(value);
-      const precision = computeValuePrecision(value);
-      if (precision > maxPrecision) {
-        maxPrecision = precision;
-      }
-    });
-  });
-
-  const sortedValues = Array.from(uniqueValues).sort((a, b) => a - b);
-  let minDiff = Number.POSITIVE_INFINITY;
-
-  for (let i = 1; i < sortedValues.length; i += 1) {
-    const diff = sortedValues[i] - sortedValues[i - 1];
-    if (diff > PRECISION_TOLERANCE && diff < minDiff) {
-      minDiff = diff;
-    }
-  }
-
-  if (!Number.isFinite(minDiff) || minDiff === 0) {
-    minDiff = 1 / Math.pow(10, maxPrecision || 2);
-  }
-
-  const minMovePrecision = computeValuePrecision(minDiff);
-  const precision = Math.min(MAX_PRICE_PRECISION, Math.max(maxPrecision, minMovePrecision));
-  const minMove = formatNumberToPrecision(minDiff, precision);
-
-  return {
-    type: 'price' as const,
-    precision,
-    minMove,
-  };
-};
+// price format utilities moved to src/utils/format.ts
 
 type ChartThemeColors = {
   background: string;
@@ -395,12 +320,22 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [renderTick, setRenderTick] = useState(0);
+  // Compute price format so child components can align displayed prices with chart precision
+  const priceFormat = useMemo(() => {
+    const values: number[] = [];
+    for (const c of candles) {
+      if (Number.isFinite(c.open)) values.push(c.open);
+      if (Number.isFinite(c.high)) values.push(c.high);
+      if (Number.isFinite(c.low)) values.push(c.low);
+      if (Number.isFinite(c.close)) values.push(c.close);
+    }
+    return determinePriceFormat(values);
+  }, [candles]);
   const isPanningRef = useRef(false);
   const isUpdatingDataRef = useRef(false);
   const isScrollingToIndexRef = useRef(false); // Track if we're scrolling to an index
   const playbackLogicalRangeRef = useRef<{ from: number; to: number } | null>(null); // Store logical range when playback starts
   const playbackRangeSizeRef = useRef<number | null>(null); // Store the range size (number of visible bars) when playback starts
-  const priceFormat = useMemo(() => determinePriceFormat(candles), [candles]);
 
   // Ensure props that should be arrays are actual arrays. Parent may pass null explicitly,
   // which would bypass parameter defaults — normalize here to avoid runtime .length errors.
@@ -866,6 +801,8 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
     };
   }, [renderTick, candles]);
 
+  // ...priceFormat is computed earlier and reused here
+
   // Theme colors for the empty-state message
   const themeColors = useMemo(() => getChartThemeColors(theme), [theme]);
 
@@ -882,6 +819,7 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
         width={dimensions.width}
         height={dimensions.height}
         converters={converters}
+        pricePrecision={priceFormat.precision}
         renderTick={renderTick}
         panHandlers={panHandlers}
       />

@@ -8,6 +8,11 @@ export interface Position {
     entryTime: number; // unix timestamp
     stopLoss?: number;
     takeProfit?: number;
+    // Optional: whether this represents a pending limit order or an open position
+    orderType?: 'market' | 'limit';
+    status?: 'open' | 'pending';
+    // If created from a drawing, store the drawing id for traceability
+    drawingId?: string;
 }
 
 export interface ClosedTrade {

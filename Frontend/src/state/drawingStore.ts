@@ -469,6 +469,27 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
       if (!state.selectionId) {
         return state;
       }
+      const target = state.drawings.find((d) => d.id === state.selectionId);
+      // If the drawing is linked to an order and that order still exists, prevent deletion
+      try {
+        // Import trading store lazily to avoid circular import issues at module initialization
+        // eslint-disable-next-line global-require, @typescript-eslint/no-var-requires
+        const { useTradingStore } = require('./tradingStore');
+        if (target && (target as any).linkedOrderId) {
+          const orderId = (target as any).linkedOrderId as string;
+          const orders = useTradingStore.getState().positions;
+          const stillExists = orders.some((p: any) => p.id === orderId);
+          if (stillExists) {
+            // Do not delete the drawing while its order exists
+            // eslint-disable-next-line no-console
+            console.warn('Cannot delete drawing linked to active order', orderId);
+            return state;
+          }
+        }
+      } catch (err) {
+        // If trading store cannot be inspected for some reason, fall back to allowing deletion
+      }
+
       return {
         drawings: state.drawings.filter((drawing) => drawing.id !== state.selectionId),
         selectionId: null,

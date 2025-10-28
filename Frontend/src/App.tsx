@@ -3,6 +3,7 @@ import ChartContainer from './components/ChartContainer';
 import MarketDataPanel from './components/MarketDataPanel';
 import ToolSidebar from './components/ToolSidebar';
 import TradingPanel from './components/TradingPanel';
+import { determinePriceFormat } from './utils/format';
 import PlaybackControls, { TickRate } from './components/PlaybackControls';
 // import PropertiesPanel from './components/PropertiesPanel';
 import DataLoader from './components/DataLoader';
@@ -626,7 +627,20 @@ const App = () => {
                 onJumpToCurrent={handleJumpToCurrent}
               />
               <div style={{ marginTop: 12 }}>
-                <TradingPanel currentPrice={displayCandles[displayPlaybackIndex]?.close} />
+                {/* Determine price precision from the display candles so the trading panel uses the same formatting */}
+                <TradingPanel
+                  currentPrice={displayCandles[displayPlaybackIndex]?.close}
+                  pricePrecision={(() => {
+                    const values: number[] = [];
+                    for (const c of displayCandles) {
+                      if (Number.isFinite(c.open)) values.push(c.open);
+                      if (Number.isFinite(c.high)) values.push(c.high);
+                      if (Number.isFinite(c.low)) values.push(c.low);
+                      if (Number.isFinite(c.close)) values.push(c.close);
+                    }
+                    return determinePriceFormat(values).precision;
+                  })()}
+                />
               </div>
             </div>
           </div>

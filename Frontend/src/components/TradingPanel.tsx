@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTradingStore } from '../state/tradingStore';
+import { formatPrice } from '../utils/format';
 
 interface Props {
     currentPrice?: number;
+    pricePrecision?: number;
 }
 
-const format = (n: number) => n.toFixed(2);
+const format = (n: number, precision: number = 2) => formatPrice(n, precision);
 
 const Tab: React.FC<{ label: string; active: boolean; onClick: () => void }> = ({ label, active, onClick }) => (
     <button
@@ -23,7 +25,7 @@ const Tab: React.FC<{ label: string; active: boolean; onClick: () => void }> = (
     </button>
 );
 
-const TradingPanel: React.FC<Props> = ({ currentPrice }) => {
+const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => {
     const startingBalance = useTradingStore((s) => s.startingBalance);
     const balance = useTradingStore((s) => s.balance);
     const equity = useTradingStore((s) => s.equity);
@@ -33,6 +35,8 @@ const TradingPanel: React.FC<Props> = ({ currentPrice }) => {
     const history = useTradingStore((s) => s.history);
     const openMarketPosition = useTradingStore((s) => s.openMarketPosition);
     const closePosition = useTradingStore((s) => s.closePosition);
+    const placeLimitOrder = useTradingStore((s) => (s as any).placeLimitOrder as ((side: any, size: number, price: number, opts?: any) => string));
+    const cancelOrder = useTradingStore((s) => (s as any).cancelOrder as ((id: string) => void));
     const updateMarketPrice = useTradingStore((s) => s.updateMarketPrice);
 
     const [collapsed, setCollapsed] = useState<boolean>(false);
@@ -91,7 +95,7 @@ const TradingPanel: React.FC<Props> = ({ currentPrice }) => {
     };
 
     const onTouchEnd = () => stopResize();
-    const [activeTab, setActiveTab] = useState<'summary' | 'positions' | 'history'>('summary');
+    const [activeTab, setActiveTab] = useState<'summary' | 'positions' | 'history' | 'orders'>('summary');
 
     useEffect(() => {
         if (typeof currentPrice === 'number') {
@@ -105,6 +109,11 @@ const TradingPanel: React.FC<Props> = ({ currentPrice }) => {
         if (typeof currentPrice !== 'number') return;
         closePosition(id, currentPrice);
     };
+
+    // Orders / contingent lists
+    const entryOrders = positions.filter((p) => p.status === 'pending');
+    const tpOrders = positions.filter((p) => p.status === 'open' && p.takeProfit !== undefined);
+    const slOrders = positions.filter((p) => p.status === 'open' && p.stopLoss !== undefined);
 
 
 
@@ -146,19 +155,19 @@ const TradingPanel: React.FC<Props> = ({ currentPrice }) => {
                     <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
                         <div style={{ flex: 1 }}>
                             <label style={{ fontSize: 12 }}>Starting</label>
-                            <div style={{ fontWeight: 700 }}>${format(startingBalance)}</div>
+                            <div style={{ fontWeight: 700 }}>${format(startingBalance, pricePrecision)}</div>
                         </div>
                         <div style={{ flex: 1 }}>
                             <label style={{ fontSize: 12 }}>Equity</label>
-                            <div style={{ fontWeight: 700 }}>${format(equity)}</div>
+                            <div style={{ fontWeight: 700 }}>${format(equity, pricePrecision)}</div>
                         </div>
                         <div style={{ flex: 1 }}>
                             <label style={{ fontSize: 12 }}>Realized P&L</label>
-                            <div style={{ fontWeight: 700 }}>${format(realizedPnl)}</div>
+                            <div style={{ fontWeight: 700 }}>${format(realizedPnl, pricePrecision)}</div>
                         </div>
                         <div style={{ flex: 1 }}>
                             <label style={{ fontSize: 12 }}>Unrealized P&L</label>
-                            <div style={{ fontWeight: 700 }}>${format(unrealizedPnl)}</div>
+                            <div style={{ fontWeight: 700 }}>${format(unrealizedPnl, pricePrecision)}</div>
                         </div>
                     </div>
 
@@ -179,6 +188,11 @@ const TradingPanel: React.FC<Props> = ({ currentPrice }) => {
                             onClick={() => setActiveTab('positions')}
                         />
                         <Tab
+                            label="Orders"
+                            active={activeTab === 'orders'}
+                            onClick={() => setActiveTab('orders')}
+                        />
+                        <Tab
                             label="History"
                             active={activeTab === 'history'}
                             onClick={() => setActiveTab('history')}
@@ -197,15 +211,100 @@ const TradingPanel: React.FC<Props> = ({ currentPrice }) => {
                                 {positions.map((p) => (
                                     <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: 8, borderRadius: 6, background: '#fff', marginBottom: 6, border: '1px solid #e5e7eb' }}>
                                         <div>
-                                            <div style={{ fontWeight: 700 }}>{p.side.toUpperCase()} {p.size}</div>
-                                            <div style={{ fontSize: 12, color: '#6b7280' }}>Entry: {format(p.entryPrice)}</div>
+                                            <div style={{ fontWeight: 700 }}>{p.side.toUpperCase()} {p.size} {p.status === 'pending' ? <span style={{ fontSize: 12, color: '#f59e0b', marginLeft: 8 }}>PENDING</span> : null}</div>
+                                            <div style={{ fontSize: 12, color: '#6b7280' }}>
+                                                <div>Entry: {format(p.entryPrice, pricePrecision)}</div>
+                                                {p.takeProfit !== undefined && (
+                                                    <div>TP: {format(p.takeProfit, pricePrecision)}</div>
+                                                )}
+                                                {p.stopLoss !== undefined && (
+                                                    <div>SL: {format(p.stopLoss, pricePrecision)}</div>
+                                                )}
+                                            </div>
                                         </div>
                                         <div style={{ textAlign: 'right' }}>
-                                            <div style={{ fontWeight: 700 }}>{typeof currentPrice === 'number' ? format(computePnl(p, currentPrice)) : '—'}</div>
-                                            <button onClick={() => handleClose(p.id)} style={{ marginTop: 6, padding: '6px 8px' }}>Close</button>
+                                            <div style={{ fontWeight: 700 }}>{p.status === 'pending' ? '—' : typeof currentPrice === 'number' ? format(computePnl(p, currentPrice), pricePrecision) : '—'}</div>
+                                            {p.status === 'pending' ? (
+                                                <button onClick={() => cancelOrder(p.id)} style={{ marginTop: 6, padding: '6px 8px' }}>Cancel</button>
+                                            ) : (
+                                                <button onClick={() => handleClose(p.id)} style={{ marginTop: 6, padding: '6px 8px' }}>Close</button>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
+                            </div>
+                        )}
+
+                        {activeTab === 'orders' && (
+                            <div>
+                                <h4 style={{ margin: '8px 0' }}>Orders</h4>
+
+                                {/* ENTRY orders (pending limit entries) */}
+                                <div style={{ marginBottom: 10 }}>
+                                    <h5 style={{ margin: '6px 0' }}>ENTRY</h5>
+                                    {entryOrders.length === 0 ? (
+                                        <div style={{ color: '#6b7280' }}>No pending entry orders</div>
+                                    ) : (
+                                        entryOrders.map((o) => (
+                                            <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', padding: 8, borderRadius: 6, background: '#fff', marginBottom: 6, border: '1px solid #e5e7eb' }}>
+                                                <div>
+                                                    <div style={{ fontWeight: 700 }}>{o.side.toUpperCase()} {o.size}</div>
+                                                    <div style={{ fontSize: 12, color: '#6b7280' }}>Entry: {format(o.entryPrice, pricePrecision)}</div>
+                                                    {o.takeProfit !== undefined && <div style={{ fontSize: 12, color: '#6b7280' }}>TP: {format(o.takeProfit, pricePrecision)}</div>}
+                                                    {o.stopLoss !== undefined && <div style={{ fontSize: 12, color: '#6b7280' }}>SL: {format(o.stopLoss, pricePrecision)}</div>}
+                                                </div>
+                                                <div style={{ textAlign: 'right' }}>
+                                                    <div style={{ fontWeight: 700, color: '#f59e0b' }}>PENDING</div>
+                                                    <div style={{ marginTop: 6 }}>
+                                                        <button onClick={() => cancelOrder(o.id)} style={{ padding: '6px 8px' }}>Cancel</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+
+                                {/* TAKE-PROFIT contingent orders for open positions */}
+                                <div style={{ marginBottom: 10 }}>
+                                    <h5 style={{ margin: '6px 0' }}>TP</h5>
+                                    {tpOrders.length === 0 ? (
+                                        <div style={{ color: '#6b7280' }}>No active take-profit orders</div>
+                                    ) : (
+                                        tpOrders.map((p) => (
+                                            <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: 8, borderRadius: 6, background: '#fff', marginBottom: 6, border: '1px solid #e5e7eb' }}>
+                                                <div>
+                                                    <div style={{ fontWeight: 700 }}>{p.side.toUpperCase()} {p.size}</div>
+                                                    <div style={{ fontSize: 12, color: '#6b7280' }}>TP: {format(p.takeProfit!, pricePrecision)}</div>
+                                                    <div style={{ fontSize: 12, color: '#6b7280' }}>Entry: {format(p.entryPrice, pricePrecision)}</div>
+                                                </div>
+                                                <div style={{ textAlign: 'right' }}>
+                                                    <div style={{ fontWeight: 700, color: '#10b981' }}>ACTIVE</div>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+
+                                {/* STOP-LOSS contingent orders for open positions */}
+                                <div>
+                                    <h5 style={{ margin: '6px 0' }}>SL</h5>
+                                    {slOrders.length === 0 ? (
+                                        <div style={{ color: '#6b7280' }}>No active stop-loss orders</div>
+                                    ) : (
+                                        slOrders.map((p) => (
+                                            <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: 8, borderRadius: 6, background: '#fff', marginBottom: 6, border: '1px solid #e5e7eb' }}>
+                                                <div>
+                                                    <div style={{ fontWeight: 700 }}>{p.side.toUpperCase()} {p.size}</div>
+                                                    <div style={{ fontSize: 12, color: '#6b7280' }}>SL: {format(p.stopLoss!, pricePrecision)}</div>
+                                                    <div style={{ fontSize: 12, color: '#6b7280' }}>Entry: {format(p.entryPrice, pricePrecision)}</div>
+                                                </div>
+                                                <div style={{ textAlign: 'right' }}>
+                                                    <div style={{ fontWeight: 700, color: '#ef4444' }}>ACTIVE</div>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
                             </div>
                         )}
 
@@ -218,9 +317,9 @@ const TradingPanel: React.FC<Props> = ({ currentPrice }) => {
                                         <div key={h.id} style={{ padding: 8, borderRadius: 6, background: '#fff', marginBottom: 6, border: '1px solid #e5e7eb' }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                                 <div style={{ fontWeight: 700 }}>{h.side.toUpperCase()} {h.size}</div>
-                                                <div style={{ fontWeight: 700 }}>${format(h.realizedPnl)}</div>
+                                                <div style={{ fontWeight: 700 }}>${format(h.realizedPnl, pricePrecision)}</div>
                                             </div>
-                                            <div style={{ fontSize: 12, color: '#6b7280' }}>Entry {format(h.entryPrice)} → Exit {format(h.exitPrice)}</div>
+                                            <div style={{ fontSize: 12, color: '#6b7280' }}>Entry {format(h.entryPrice, pricePrecision)} → Exit {format(h.exitPrice, pricePrecision)}</div>
                                         </div>
                                     ))}
                                 </div>

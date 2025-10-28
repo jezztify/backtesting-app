@@ -22,6 +22,8 @@ export interface RectangleDrawing {
   end: ChartPoint;
   style: DrawingStyle & { fillColor: string; opacity: number; strokeOpacity: number };
   midline?: boolean; // If true, draw a midline through the rectangle
+  // Optional link to a trading order id created from this drawing
+  linkedOrderId?: string;
 }
 
 export interface TrendlineDrawing {
@@ -32,6 +34,8 @@ export interface TrendlineDrawing {
   extendLeft: boolean;
   extendRight: boolean;
   style: DrawingStyle & { strokeColor: string; lineWidth: number };
+  // Optional link to a trading order id created from this drawing
+  linkedOrderId?: string;
 }
 
 export interface PositionStyle extends DrawingStyle {
@@ -54,6 +58,8 @@ export interface PositionDrawing {
   stopLoss?: number; // Stop loss price
   takeProfit?: number; // Take profit price
   style: PositionStyle;
+  // Optional link to a trading order id created from this drawing
+  linkedOrderId?: string;
 }
 
 export type Drawing = RectangleDrawing | TrendlineDrawing | PositionDrawing;

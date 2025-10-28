@@ -1,6 +1,7 @@
 import { PointerEvent, useCallback, useMemo, useRef, useState } from 'react';
 import PropertiesPanelModal from './PropertiesPanelModal';
 import { useDrawingStore } from '../state/drawingStore';
+import { useTradingStore } from '../state/tradingStore';
 import { ChartPoint, Drawing, RectangleDrawing, TrendlineDrawing, PositionDrawing } from '../types/drawings';
 import { distanceToSegment, extendLineToBounds, isPointInRect, clipLineToBounds } from '../utils/geometry';
 
@@ -27,6 +28,7 @@ interface DrawingOverlayProps {
   height: number;
   converters: ChartConverters;
   renderTick: number;
+  pricePrecision: number;
   panHandlers?: PanHandlers;
 }
 
@@ -255,11 +257,12 @@ const getPointerPosition = (event: PointerEvent<SVGSVGElement>): { x: number; y:
   };
 };
 
-const DrawingOverlay = ({ width, height, converters, renderTick, panHandlers }: DrawingOverlayProps) => {
+const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision, panHandlers }: DrawingOverlayProps) => {
   const overlayRef = useRef<SVGSVGElement | null>(null);
   const [interaction, setInteraction] = useState<InteractionState>({ type: 'idle' });
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; drawingId: string } | null>(null);
   const [showPropertiesModal, setShowPropertiesModal] = useState<{ drawingId: string; x: number; y: number } | null>(null);
+  const [showTradeModal, setShowTradeModal] = useState<{ drawingId: string; x: number; y: number; size: number } | null>(null);
   const [modalDragging, setModalDragging] = useState<{ offsetX: number; offsetY: number } | null>(null);
 
   const {
@@ -289,6 +292,13 @@ const DrawingOverlay = ({ width, height, converters, renderTick, panHandlers }: 
     updateDrawingPoints: state.updateDrawingPoints,
     updatePositionStyle: state.updatePositionStyle,
   }));
+
+  // trading store will be used for placing limit orders from context menu
+  const placeLimitOrder = useTradingStore((s) => s.placeLimitOrder);
+  const cancelOrder = useTradingStore((s) => s.cancelOrder);
+  // subscribe to positions so we can lock drawings that have an associated order
+  const tradingPositions = useTradingStore((s) => s.positions);
+  const lockedDrawingIds = useMemo(() => new Set(tradingPositions.filter((p) => !!p.drawingId).map((p) => p.drawingId!)), [tradingPositions]);
 
   const canvasDrawings = useMemo(() => {
     return drawings
@@ -488,6 +498,8 @@ const DrawingOverlay = ({ width, height, converters, renderTick, panHandlers }: 
   const hitTestHandles = useCallback(
     (canvasPoint: { x: number; y: number }): HandleHitResult | null => {
       for (const item of canvasDrawings) {
+        // skip handles for locked drawings (drawings with an associated order)
+        if (lockedDrawingIds.has(item.drawing.id)) continue;
         if (isCanvasRectangle(item)) {
           const handlePositions = getRectangleHandlePositions(item.rect);
           for (const handle of RECTANGLE_HANDLES) {
@@ -554,6 +566,8 @@ const DrawingOverlay = ({ width, height, converters, renderTick, panHandlers }: 
     (canvasPoint: { x: number; y: number }) => {
       for (let i = canvasDrawings.length - 1; i >= 0; i -= 1) {
         const item = canvasDrawings[i];
+        // If this drawing is locked to an order, do not allow hit-testing (prevents selection/move/resize)
+        if (lockedDrawingIds.has(item.drawing.id)) continue;
         if (isCanvasRectangle(item)) {
           if (isPointInRect(canvasPoint, item.rect)) {
             return item.drawing;
@@ -562,6 +576,32 @@ const DrawingOverlay = ({ width, height, converters, renderTick, panHandlers }: 
           // Hit test for position rectangle
           if (isPointInRect(canvasPoint, item.rect)) {
             return item.drawing;
+          }
+
+          // Also consider the take-profit / stop-loss "zones" which can extend
+          // vertically outside the main position rect. If the pointer is within
+          // the rectangle's horizontal bounds and between the entry and TP/SL
+          // vertical coordinates, treat it as a hit so context menu / right-click
+          // works when clicking on TP or SL areas.
+          const drawing = item.drawing as PositionDrawing;
+          const entryY = item.point.y;
+
+          if (item.takeProfit !== undefined) {
+            const tpY = item.takeProfit.y;
+            const topY = Math.min(entryY, tpY);
+            const bottomY = Math.max(entryY, tpY);
+            if (canvasPoint.x >= item.rect.x && canvasPoint.x <= item.rect.x + item.rect.width && canvasPoint.y >= topY && canvasPoint.y <= bottomY) {
+              return item.drawing;
+            }
+          }
+
+          if (item.stopLoss !== undefined) {
+            const slY = item.stopLoss.y;
+            const topY = Math.min(entryY, slY);
+            const bottomY = Math.max(entryY, slY);
+            if (canvasPoint.x >= item.rect.x && canvasPoint.x <= item.rect.x + item.rect.width && canvasPoint.y >= topY && canvasPoint.y <= bottomY) {
+              return item.drawing;
+            }
           }
         } else {
           // Trendline hit test
@@ -574,7 +614,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, panHandlers }: 
       }
       return null;
     },
-    [canvasDrawings]
+    [canvasDrawings, lockedDrawingIds]
   );
 
   const handlePointerDown = useCallback(
@@ -730,6 +770,14 @@ const DrawingOverlay = ({ width, height, converters, renderTick, panHandlers }: 
 
       setShowPropertiesModal({ drawingId: contextMenu.drawingId, x, y });
       setContextMenu(null);
+    } else if ((action === 'trade' || action === 'createOrder') && contextMenu) {
+      // Open small trade modal to confirm size before placing a limit order
+      const modalWidth = 260;
+      const modalHeight = 140;
+      const x2 = Math.max(0, Math.min(width - modalWidth, contextMenu.x + 10));
+      const y2 = Math.max(0, Math.min(height - modalHeight, contextMenu.y - 50));
+      setShowTradeModal({ drawingId: contextMenu.drawingId, x: x2, y: y2, size: 1 });
+      setContextMenu(null);
     } else {
       setContextMenu(null);
     }
@@ -738,6 +786,24 @@ const DrawingOverlay = ({ width, height, converters, renderTick, panHandlers }: 
   // Hide modal
   const handleCloseModal = useCallback(() => {
     setShowPropertiesModal(null);
+  }, []);
+
+  const handleConfirmTrade = useCallback((size: number) => {
+    if (!showTradeModal) return;
+    const drawing = drawings.find((d) => d.id === showTradeModal.drawingId);
+    if (drawing && (drawing.type === 'long' || drawing.type === 'short')) {
+      const price = (drawing as PositionDrawing).point.price;
+      try {
+        placeLimitOrder(drawing.type, size, price, { drawingId: drawing.id, stopLoss: (drawing as PositionDrawing).stopLoss, takeProfit: (drawing as PositionDrawing).takeProfit });
+      } catch (err) {
+        // ignore
+      }
+    }
+    setShowTradeModal(null);
+  }, [showTradeModal, drawings, placeLimitOrder]);
+
+  const handleCancelTrade = useCallback(() => {
+    setShowTradeModal(null);
   }, []);
 
   // Modal drag handlers
@@ -1089,8 +1155,20 @@ const DrawingOverlay = ({ width, height, converters, renderTick, panHandlers }: 
           const entryY = item.point.y;
           const takeProfitY: number | null = item.takeProfit?.y ?? null;
           const stopLossY: number | null = item.stopLoss?.y ?? null;
-          const lineStartX = item.rect.x;
-          const lineEndX = item.rect.x + item.rect.width;
+          // Lines should span the full canvas width to mark levels across the chart
+          const lineStartX = 0;
+          const lineEndX = width;
+
+          // Chart visuals for pending orders (if a pending order exists linked to this drawing)
+          const pendingOrder = tradingPositions.find((p) => p.drawingId === drawing.id && p.status === 'pending');
+          // Any order (pending or executed) that was created from this drawing
+          const linkedOrder = tradingPositions.find((p) => p.drawingId === drawing.id);
+          const hasLinkedOrder = !!linkedOrder;
+          let pendingCanvasY: number | null = null;
+          if (pendingOrder) {
+            const maybe = converters.toCanvas({ time: drawing.point.time, price: pendingOrder.entryPrice });
+            if (maybe) pendingCanvasY = maybe.y;
+          }
 
           return (
             <g key={drawing.id} filter={selectionId === drawing.id ? 'url(#selection-shadow)' : undefined}>
@@ -1122,18 +1200,20 @@ const DrawingOverlay = ({ width, height, converters, renderTick, panHandlers }: 
                 />
               )}
 
-              {/* Entry level line (where TP and SL rectangles meet) */}
-              <line
-                x1={lineStartX}
-                y1={entryY}
-                x2={lineEndX}
-                y2={entryY}
-                stroke={color}
-                strokeWidth={2.5}
-              />
+              {/* Entry level line (where TP and SL rectangles meet) - only draw when an order exists for this drawing */}
+              {hasLinkedOrder && (
+                <line
+                  x1={lineStartX}
+                  y1={entryY}
+                  x2={lineEndX}
+                  y2={entryY}
+                  stroke={color}
+                  strokeWidth={2.5}
+                />
+              )}
 
-              {/* Take Profit level line */}
-              {takeProfitY !== null && (
+              {/* Take Profit level line (only when an order exists) */}
+              {hasLinkedOrder && takeProfitY !== null && (
                 <>
                   <line
                     x1={lineStartX}
@@ -1151,13 +1231,13 @@ const DrawingOverlay = ({ width, height, converters, renderTick, panHandlers }: 
                     fontSize="11"
                     fontWeight="bold"
                   >
-                    TP: {drawing.takeProfit?.toFixed(5)}
+                    TP: {drawing.takeProfit !== undefined ? drawing.takeProfit.toFixed(pricePrecision) : ''}
                   </text>
                 </>
               )}
 
-              {/* Stop Loss level line */}
-              {stopLossY !== null && (
+              {/* Stop Loss level line (only when an order exists) */}
+              {hasLinkedOrder && stopLossY !== null && (
                 <>
                   <line
                     x1={lineStartX}
@@ -1175,7 +1255,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, panHandlers }: 
                     fontSize="11"
                     fontWeight="bold"
                   >
-                    SL: {drawing.stopLoss?.toFixed(5)}
+                    SL: {drawing.stopLoss !== undefined ? drawing.stopLoss.toFixed(pricePrecision) : ''}
                   </text>
                 </>
               )}
@@ -1188,7 +1268,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, panHandlers }: 
                 fontSize="12"
                 fontWeight="bold"
               >
-                {isLong ? 'LONG' : 'SHORT'} Entry: {drawing.point.price.toFixed(5)}
+                {isLong ? 'LONG' : 'SHORT'} Entry: {drawing.point.price.toFixed(pricePrecision)}
               </text>
 
               {/* Risk/Reward label on-chart (if enabled) */}
@@ -1213,8 +1293,8 @@ const DrawingOverlay = ({ width, height, converters, renderTick, panHandlers }: 
                 })()
               )}
 
-              {/* Selection handles - corners like rectangle */}
-              {selectionId === drawing.id && (
+              {/* Selection handles - corners like rectangle (hidden when locked) */}
+              {selectionId === drawing.id && !hasLinkedOrder && (
                 (() => {
                   const { left: leftX, right: rightX } = getPositionHandleXs(item.rect);
                   return (
@@ -1239,6 +1319,32 @@ const DrawingOverlay = ({ width, height, converters, renderTick, panHandlers }: 
                     </>
                   );
                 })()
+              )}
+
+              {/* Pending order visual */}
+              {pendingOrder && pendingCanvasY !== null && (
+                <g>
+                  <line
+                    x1={item.rect.x}
+                    y1={pendingCanvasY}
+                    x2={item.rect.x + item.rect.width}
+                    y2={pendingCanvasY}
+                    stroke="#f59e0b"
+                    strokeWidth={1.5}
+                    strokeDasharray="6 4"
+                    opacity={0.9}
+                  />
+                  <text
+                    x={item.rect.x + item.rect.width - 6}
+                    y={pendingCanvasY + (isLong ? -6 : 14)}
+                    fill="#f59e0b"
+                    fontSize="11"
+                    fontWeight="700"
+                    textAnchor="end"
+                  >
+                    PENDING {pendingOrder.size}
+                  </text>
+                </g>
               )}
             </g>
           );
@@ -1460,6 +1566,53 @@ const DrawingOverlay = ({ width, height, converters, renderTick, panHandlers }: 
               >
                 Properties
               </div>
+              {/* Create Order button: disable if this drawing already has a linked order */}
+              {lockedDrawingIds.has(contextMenu.drawingId) ? (
+                <div
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    padding: '8px 12px',
+                    background: 'var(--color-panel)',
+                    color: 'var(--color-text-muted)',
+                    textAlign: 'left',
+                    cursor: 'not-allowed',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    userSelect: 'none'
+                  }}
+                >
+                  Create Order (locked)
+                </div>
+              ) : (
+                <div
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    handleContextMenuAction('createOrder');
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'var(--color-button-hover)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'var(--color-panel)';
+                  }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    padding: '8px 12px',
+                    background: 'var(--color-panel)',
+                    color: 'var(--color-text)',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    userSelect: 'none'
+                  }}
+                >
+                  Create Order
+                </div>
+              )}
             </div>
           </foreignObject>
         </g>
@@ -1491,7 +1644,53 @@ const DrawingOverlay = ({ width, height, converters, renderTick, panHandlers }: 
               drawingId={showPropertiesModal.drawingId}
               onClose={handleCloseModal}
               onDragStart={handleModalDragStart}
+              pricePrecision={pricePrecision}
+              readOnly={lockedDrawingIds.has(showPropertiesModal.drawingId)}
             />
+          </div>
+        </foreignObject>
+      )}
+
+      {/* Trade Modal */}
+      {showTradeModal && (
+        <foreignObject
+          x={showTradeModal.x}
+          y={showTradeModal.y}
+          width={260}
+          height={140}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{
+            background: 'var(--color-panel)',
+            color: 'var(--color-text)',
+            border: '1px solid var(--color-border-strong)',
+            borderRadius: 8,
+            padding: 12,
+            width: '100%',
+            boxSizing: 'border-box',
+            pointerEvents: 'auto',
+            fontFamily: 'system-ui, -apple-system, sans-serif'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <strong style={{ fontSize: 14 }}>Place Limit Order</strong>
+              <button onClick={() => setShowTradeModal(null)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>×</button>
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <label style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Size</label>
+              <input
+                type="number"
+                min={0.001}
+                step={0.001}
+                value={showTradeModal.size}
+                onChange={(e) => setShowTradeModal({ ...showTradeModal, size: Number(e.target.value) })}
+                style={{ width: '100%', padding: 8, boxSizing: 'border-box', marginTop: 6 }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={handleCancelTrade} style={{ padding: '8px 12px', background: 'var(--color-button-bg)', border: '1px solid var(--color-border)', borderRadius: 6 }}>Cancel</button>
+              <button onClick={() => handleConfirmTrade(showTradeModal.size)} style={{ padding: '8px 12px', background: 'var(--color-accent)', color: 'var(--color-text-inverse)', border: 'none', borderRadius: 6 }}>Place</button>
+            </div>
           </div>
         </foreignObject>
       )}
