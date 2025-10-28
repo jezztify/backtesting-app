@@ -7,6 +7,22 @@ interface Props {
 
 const format = (n: number) => n.toFixed(2);
 
+const Tab: React.FC<{ label: string; active: boolean; onClick: () => void }> = ({ label, active, onClick }) => (
+    <button
+        onClick={onClick}
+        style={{
+            padding: '6px 12px',
+            borderRadius: 8,
+            border: active ? '1px solid #111827' : '1px solid transparent',
+            background: active ? '#fff' : 'transparent',
+            cursor: 'pointer',
+            fontWeight: active ? 700 : 500,
+        }}
+    >
+        {label}
+    </button>
+);
+
 const TradingPanel: React.FC<Props> = ({ currentPrice }) => {
     const startingBalance = useTradingStore((s) => s.startingBalance);
     const balance = useTradingStore((s) => s.balance);
@@ -20,6 +36,7 @@ const TradingPanel: React.FC<Props> = ({ currentPrice }) => {
     const updateMarketPrice = useTradingStore((s) => s.updateMarketPrice);
 
     const [collapsed, setCollapsed] = useState<boolean>(false);
+    const [activeTab, setActiveTab] = useState<'summary' | 'positions' | 'history'>('summary');
 
     useEffect(() => {
         if (typeof currentPrice === 'number') {
@@ -72,35 +89,66 @@ const TradingPanel: React.FC<Props> = ({ currentPrice }) => {
 
                     {/* Starting balance setter removed from UI per request */}
 
-                    <hr />
+                    {/* Styled tabs */}
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                        <Tab
+                            label="Summary"
+                            active={activeTab === 'summary'}
+                            onClick={() => setActiveTab('summary')}
+                        />
+                        <Tab
+                            label="Positions"
+                            active={activeTab === 'positions'}
+                            onClick={() => setActiveTab('positions')}
+                        />
+                        <Tab
+                            label="History"
+                            active={activeTab === 'history'}
+                            onClick={() => setActiveTab('history')}
+                        />
+                    </div>
 
-                    <h4 style={{ margin: '8px 0' }}>Open Positions</h4>
-                    {positions.length === 0 && <div style={{ color: '#6b7280' }}>No open positions</div>}
-                    {positions.map((p) => (
-                        <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: 8, borderRadius: 6, background: '#fff', marginBottom: 6, border: '1px solid #e5e7eb' }}>
+                    <div>
+                        {activeTab === 'summary' && (
+                            <div style={{ color: '#6b7280', fontSize: 13 }}>Account summary is shown above. Use Positions or History to view trades.</div>
+                        )}
+
+                        {activeTab === 'positions' && (
                             <div>
-                                <div style={{ fontWeight: 700 }}>{p.side.toUpperCase()} {p.size}</div>
-                                <div style={{ fontSize: 12, color: '#6b7280' }}>Entry: {format(p.entryPrice)}</div>
+                                <h4 style={{ margin: '8px 0' }}>Open Positions</h4>
+                                {positions.length === 0 && <div style={{ color: '#6b7280' }}>No open positions</div>}
+                                {positions.map((p) => (
+                                    <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: 8, borderRadius: 6, background: '#fff', marginBottom: 6, border: '1px solid #e5e7eb' }}>
+                                        <div>
+                                            <div style={{ fontWeight: 700 }}>{p.side.toUpperCase()} {p.size}</div>
+                                            <div style={{ fontSize: 12, color: '#6b7280' }}>Entry: {format(p.entryPrice)}</div>
+                                        </div>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <div style={{ fontWeight: 700 }}>{typeof currentPrice === 'number' ? format(computePnl(p, currentPrice)) : '—'}</div>
+                                            <button onClick={() => handleClose(p.id)} style={{ marginTop: 6, padding: '6px 8px' }}>Close</button>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
-                            <div style={{ textAlign: 'right' }}>
-                                <div style={{ fontWeight: 700 }}>{typeof currentPrice === 'number' ? format(computePnl(p, currentPrice)) : '—'}</div>
-                                <button onClick={() => handleClose(p.id)} style={{ marginTop: 6, padding: '6px 8px' }}>Close</button>
-                            </div>
-                        </div>
-                    ))}
+                        )}
 
-                    <h4 style={{ margin: '8px 0' }}>History</h4>
-                    {history.length === 0 && <div style={{ color: '#6b7280' }}>No closed trades</div>}
-                    <div style={{ maxHeight: 180, overflow: 'auto' }}>
-                        {history.map((h) => (
-                            <div key={h.id} style={{ padding: 8, borderRadius: 6, background: '#fff', marginBottom: 6, border: '1px solid #e5e7eb' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <div style={{ fontWeight: 700 }}>{h.side.toUpperCase()} {h.size}</div>
-                                    <div style={{ fontWeight: 700 }}>${format(h.realizedPnl)}</div>
+                        {activeTab === 'history' && (
+                            <div>
+                                <h4 style={{ margin: '8px 0' }}>History</h4>
+                                {history.length === 0 && <div style={{ color: '#6b7280' }}>No closed trades</div>}
+                                <div style={{ maxHeight: 220, overflow: 'auto' }}>
+                                    {history.map((h) => (
+                                        <div key={h.id} style={{ padding: 8, borderRadius: 6, background: '#fff', marginBottom: 6, border: '1px solid #e5e7eb' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <div style={{ fontWeight: 700 }}>{h.side.toUpperCase()} {h.size}</div>
+                                                <div style={{ fontWeight: 700 }}>${format(h.realizedPnl)}</div>
+                                            </div>
+                                            <div style={{ fontSize: 12, color: '#6b7280' }}>Entry {format(h.entryPrice)} → Exit {format(h.exitPrice)}</div>
+                                        </div>
+                                    ))}
                                 </div>
-                                <div style={{ fontSize: 12, color: '#6b7280' }}>Entry {format(h.entryPrice)} → Exit {format(h.exitPrice)}</div>
                             </div>
-                        ))}
+                        )}
                     </div>
                 </div>
             )}
