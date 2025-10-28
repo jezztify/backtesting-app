@@ -11,8 +11,11 @@ const generateId = () => {
 interface TradingState extends AccountState {
     positions: Position[];
     history: ClosedTrade[];
+    // standard lot size in units (e.g. 100000 for forex standard lot)
+    lotSize: number;
     setStartingBalance: (amount: number) => void;
     setLeverage: (lev: number) => void;
+    setLotSize: (n: number) => void;
     openMarketPosition: (side: PositionSide, size: number, price: number, opts?: { stopLoss?: number; takeProfit?: number }) => string;
     placeLimitOrder: (side: PositionSide, size: number, price: number, opts?: { stopLoss?: number; takeProfit?: number; drawingId?: string }) => string;
     cancelOrder: (positionId: string) => void;
@@ -28,8 +31,13 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     unrealizedPnl: 0,
     equity: 10000,
     leverage: 1,
+    lotSize: 100000,
     positions: [],
     history: [],
+    setLotSize: (n: number) => {
+        const v = Number.isFinite(n) ? n : 100000;
+        return set(() => ({ lotSize: Math.max(1, v) }));
+    },
     setStartingBalance: (amount: number) =>
         set(() => ({ startingBalance: amount, balance: amount, realizedPnl: 0, unrealizedPnl: 0, equity: amount })),
     setLeverage: (lev: number) => {

@@ -59,16 +59,20 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
     const leverage = useTradingStore((s) => (s as any).leverage as number);
     const setLeverage = useTradingStore((s) => (s as any).setLeverage as (n: number) => void);
     const setStartingBalance = useTradingStore((s) => s.setStartingBalance);
+    const lotSize = useTradingStore((s) => (s as any).lotSize as number);
+    const setLotSize = useTradingStore((s) => (s as any).setLotSize as (n: number) => void);
 
     const [collapsed, setCollapsed] = useState<boolean>(false);
     const [showAccountOptions, setShowAccountOptions] = useState<boolean>(false);
     const [tempStartingBalance, setTempStartingBalance] = useState<number>(startingBalance);
     const [tempLeverage, setTempLeverage] = useState<number>(leverage || 1);
+    const [tempLotSize, setTempLotSize] = useState<number>(lotSize || 100000);
 
     useEffect(() => {
         setTempStartingBalance(startingBalance);
         setTempLeverage(leverage || 1);
-    }, [startingBalance, leverage]);
+        setTempLotSize(lotSize || 100000);
+    }, [startingBalance, leverage, lotSize]);
     const STORAGE_KEY = 'tradingPanelHeight';
     const defaultHeight = 360;
     const minHeight = 120;
@@ -326,6 +330,17 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                                         style={{ width: '100%', padding: '6px 8px', marginTop: 6, borderRadius: 6, border: '1px solid #e5e7eb' }}
                                     />
                                 </div>
+                                <div style={{ width: 160 }}>
+                                    <label style={{ fontSize: 12, color: '#6b7280' }}>Standard Lot Size (units)</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        step={1}
+                                        value={tempLotSize}
+                                        onChange={(e) => setTempLotSize(Number(e.target.value))}
+                                        style={{ width: '100%', padding: '6px 8px', marginTop: 6, borderRadius: 6, border: '1px solid #e5e7eb' }}
+                                    />
+                                </div>
                             </div>
                             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                                 <button
@@ -335,8 +350,10 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                                         if (!Number.isFinite(tempStartingBalance) || tempStartingBalance <= 0) return;
                                         // validate leverage input to avoid saving NaN/Infinity or values < 1
                                         if (!Number.isFinite(tempLeverage) || tempLeverage < 1) return;
+                                        if (!Number.isFinite(tempLotSize) || tempLotSize < 1) return;
                                         setStartingBalance(tempStartingBalance);
                                         setLeverage(Math.max(1, tempLeverage));
+                                        setLotSize(Math.max(1, Math.round(tempLotSize)));
                                         setShowAccountOptions(false);
                                     }}
                                     style={{ padding: '6px 10px', borderRadius: 6, background: '#111827', color: '#fff', border: 'none', cursor: 'pointer' }}
@@ -349,6 +366,7 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                                         // reset temp to current values and close
                                         setTempStartingBalance(startingBalance);
                                         setTempLeverage(leverage || 1);
+                                        setTempLotSize(lotSize || 100000);
                                         setShowAccountOptions(false);
                                     }}
                                     style={{ padding: '6px 10px', borderRadius: 6, background: 'transparent', color: '#111827', border: '1px solid #e5e7eb', cursor: 'pointer' }}
@@ -447,7 +465,7 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                                 {positions.map((p) => (
                                     <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: 8, borderRadius: 6, background: '#fff', marginBottom: 6, border: '1px solid #e5e7eb' }}>
                                         <div>
-                                            <div style={{ fontWeight: 700 }}>{p.side.toUpperCase()} {p.size} {p.status === 'pending' ? <span style={{ fontSize: 12, color: '#f59e0b', marginLeft: 8 }}>PENDING</span> : null}</div>
+                                            <div style={{ fontWeight: 700 }}>{p.side.toUpperCase()} {formatLot(p.size, lotSize)} {p.status === 'pending' ? <span style={{ fontSize: 12, color: '#f59e0b', marginLeft: 8 }}>PENDING</span> : null}</div>
                                             <div style={{ fontSize: 12, color: '#6b7280' }}>
                                                 <div>Entry: {format(p.entryPrice, pricePrecision)}</div>
                                                 {p.takeProfit !== undefined && (
@@ -478,13 +496,13 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                                 {/* ENTRY orders (pending limit entries) */}
                                 <div style={{ marginBottom: 10 }}>
                                     <h5 style={{ margin: '6px 0' }}>ENTRY</h5>
-                                    {entryOrders.length === 0 ? (
+                                        {entryOrders.length === 0 ? (
                                         <div style={{ color: '#6b7280' }}>No pending entry orders</div>
                                     ) : (
                                         entryOrders.map((o) => (
                                             <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', padding: 8, borderRadius: 6, background: '#fff', marginBottom: 6, border: '1px solid #e5e7eb' }}>
                                                 <div>
-                                                    <div style={{ fontWeight: 700 }}>{o.side.toUpperCase()} {o.size}</div>
+                                                    <div style={{ fontWeight: 700 }}>{o.side.toUpperCase()} {formatLot(o.size, lotSize)}</div>
                                                     <div style={{ fontSize: 12, color: '#6b7280' }}>Entry: {format(o.entryPrice, pricePrecision)}</div>
                                                     {o.takeProfit !== undefined && <div style={{ fontSize: 12, color: '#6b7280' }}>TP: {format(o.takeProfit, pricePrecision)}</div>}
                                                     {o.stopLoss !== undefined && <div style={{ fontSize: 12, color: '#6b7280' }}>SL: {format(o.stopLoss, pricePrecision)}</div>}
@@ -509,7 +527,7 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                                         tpOrders.map((p) => (
                                             <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: 8, borderRadius: 6, background: '#fff', marginBottom: 6, border: '1px solid #e5e7eb' }}>
                                                 <div>
-                                                    <div style={{ fontWeight: 700 }}>{p.side.toUpperCase()} {p.size}</div>
+                                                    <div style={{ fontWeight: 700 }}>{p.side.toUpperCase()} {formatLot(p.size, lotSize)}</div>
                                                     <div style={{ fontSize: 12, color: '#6b7280' }}>TP: {format(p.takeProfit!, pricePrecision)}</div>
                                                     <div style={{ fontSize: 12, color: '#6b7280' }}>Entry: {format(p.entryPrice, pricePrecision)}</div>
                                                 </div>
@@ -530,7 +548,7 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                                         slOrders.map((p) => (
                                             <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: 8, borderRadius: 6, background: '#fff', marginBottom: 6, border: '1px solid #e5e7eb' }}>
                                                 <div>
-                                                    <div style={{ fontWeight: 700 }}>{p.side.toUpperCase()} {p.size}</div>
+                                                    <div style={{ fontWeight: 700 }}>{p.side.toUpperCase()} {formatLot(p.size, lotSize)}</div>
                                                     <div style={{ fontSize: 12, color: '#6b7280' }}>SL: {format(p.stopLoss!, pricePrecision)}</div>
                                                     <div style={{ fontSize: 12, color: '#6b7280' }}>Entry: {format(p.entryPrice, pricePrecision)}</div>
                                                 </div>
@@ -552,7 +570,7 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                                     {history.map((h) => (
                                         <div key={h.id} style={{ padding: 8, borderRadius: 6, background: '#fff', marginBottom: 6, border: '1px solid #e5e7eb' }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                <div style={{ fontWeight: 700 }}>{h.side.toUpperCase()} {h.size}</div>
+                                                <div style={{ fontWeight: 700 }}>{h.side.toUpperCase()} {formatLot(h.size, lotSize)}</div>
                                                 <div style={{ fontWeight: 700 }}>${format(h.realizedPnl, pricePrecision)}</div>
                                             </div>
                                             <div style={{ fontSize: 12, color: '#6b7280' }}>Entry {format(h.entryPrice, pricePrecision)} → Exit {format(h.exitPrice, pricePrecision)}</div>
@@ -743,4 +761,16 @@ function computePnl(p: any, price: number) {
     return signed * p.size;
 }
 
+// Format a raw size (units) to lots for display. Default: 1 lot = 100,000 units.
+function formatLot(size: number, lotSize: number = 100000, decimals: number = 2) {
+    if (!Number.isFinite(size)) return String(size);
+    const lots = size / lotSize;
+    // show reasonable precision and trim trailing zeros
+    const s = lots.toFixed(decimals).replace(/\.0+$|(?<!\.)0+$/g, '');
+    const abs = Math.abs(lots);
+    const label = abs === 1 ? 'lot' : 'lots';
+    return `${s} ${label}`;
+}
+
 export default TradingPanel;
+
