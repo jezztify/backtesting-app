@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { PositionDrawing } from '../types/drawings';
+import { useTradingStore } from '../state/tradingStore';
 
 interface Props {
     drawing?: PositionDrawing | null;
@@ -13,7 +14,10 @@ interface Props {
 }
 
 const PlaceLimitOrderModal: React.FC<Props> = ({ drawing, equity, pricePrecision, initialSize = 1, initialRiskPercent = 0.5, onPlace, onCancel, onClose }) => {
+    // Present sizes in lots in the UI. Internal store expects units.
+    const lotSize = useTradingStore((s) => s.lotSize || 100000);
     const [riskPercent, setRiskPercent] = useState<number>(initialRiskPercent ?? 0);
+    // `size` in this modal is in lots (not raw units). initialSize passed from callers is assumed to be in lots.
     const [size, setSize] = useState<number>(initialSize ?? 1);
 
     useEffect(() => {
@@ -30,16 +34,25 @@ const PlaceLimitOrderModal: React.FC<Props> = ({ drawing, equity, pricePrecision
     const tp = drawing.takeProfit;
     const unitRisk = sl !== undefined ? Math.abs(entry - sl) : 0;
 
-    // If risk % is specified, compute a suggested size from equity and unit risk.
-    let suggestedSizeFromRisk = size;
+    // If risk % is specified, compute a suggested size (in units) from equity and unit risk,
+    // then convert to lots for display.
+    let suggestedSizeFromRiskLots = size;
     if (unitRisk > 0 && riskPercent > 0) {
-        suggestedSizeFromRisk = Math.max(0, (equity * (riskPercent / 100)) / unitRisk);
+        const suggestedUnits = Math.max(0, (equity * (riskPercent / 100)) / unitRisk);
+        // account for leverage when suggesting lots: units = lots * lotSize * leverage => lots = units / (lotSize * leverage)
+        const leverage = useTradingStore.getState().leverage || 1;
+        suggestedSizeFromRiskLots = suggestedUnits / (lotSize * leverage);
     }
 
-    // `size` is always a number (initialized from props/state). Use it directly as the computed size.
-    const computedSize = size;
-    const dollarRisk = unitRisk > 0 ? unitRisk * computedSize : 0;
-    const dollarReward = tp !== undefined ? Math.abs(tp - entry) * computedSize : 0;
+    const leverage = useTradingStore((s) => s.leverage || 1);
+
+    // `size` is in lots in this modal. Convert to units for dollar risk/reward calculations.
+    // Units are affected by leverage: effective units = lots * lotSize * leverage
+    const computedSizeLots = size;
+    const computedSizeUnits = computedSizeLots;
+    const rrr = unitRisk > 0 && tp !== undefined ? (Math.abs(tp - entry) / unitRisk).toFixed(2) : 'n/a';
+    const dollarRisk = unitRisk > 0 ? unitRisk * computedSizeUnits * lotSize : 0;
+    const dollarReward = tp !== undefined ? dollarRisk * (rrr !== 'n/a' ? Number(rrr) : 0) : 0;
 
     return (
         <div>
@@ -65,6 +78,10 @@ const PlaceLimitOrderModal: React.FC<Props> = ({ drawing, equity, pricePrecision
                     <div>Equity</div>
                     <div style={{ fontWeight: 700 }}>${equity.toFixed(2)}</div>
                 </div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                    <div>Reward/Risk Ratio</div>
+                    <div style={{ fontWeight: 700 }}>{rrr}</div>
+                </div>
             </div>
 
             <div style={{ marginBottom: 8 }}>
@@ -78,8 +95,9 @@ const PlaceLimitOrderModal: React.FC<Props> = ({ drawing, equity, pricePrecision
                         const val = Number(e.target.value);
                         setRiskPercent(isNaN(val) ? 0 : val);
                         if (unitRisk > 0 && !isNaN(val) && val > 0) {
-                            const computed = Math.max(0, (equity * (val / 100)) / unitRisk);
-                            setSize(computed);
+                            const computedUnits = Math.max(0, (equity * (val / 100)) / unitRisk);
+                            // set size in lots
+                            setSize(computedUnits / lotSize);
                         }
                     }}
                     style={{ width: '100%', padding: 8, boxSizing: 'border-box', marginTop: 6 }}
@@ -87,18 +105,19 @@ const PlaceLimitOrderModal: React.FC<Props> = ({ drawing, equity, pricePrecision
             </div>
 
             <div style={{ marginBottom: 8 }}>
-                <label style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)' }}>Size</label>
+                <label style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)' }}>Size (lots)</label>
                 <input
                     type="number"
                     min={0}
-                    step={0.0001}
-                    value={computedSize}
+                    step={0.01}
+                    value={computedSizeLots}
                     onChange={(e) => {
                         const val = Number(e.target.value);
                         setSize(isNaN(val) ? 0 : val);
                     }}
                     style={{ width: '100%', padding: 8, boxSizing: 'border-box', marginTop: 6 }}
                 />
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 6 }}>Units: {computedSizeUnits.toLocaleString()}</div>
             </div>
 
             <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', marginBottom: 8 }}>
@@ -114,7 +133,8 @@ const PlaceLimitOrderModal: React.FC<Props> = ({ drawing, equity, pricePrecision
 
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button onClick={onCancel} style={{ padding: '8px 12px', background: 'var(--color-button-bg)', border: '1px solid var(--color-border)', borderRadius: 6 }}>Cancel</button>
-                <button onClick={() => onPlace(computedSize, riskPercent)} style={{ padding: '8px 12px', background: 'var(--color-accent)', color: 'var(--color-text-inverse)', border: 'none', borderRadius: 6 }}>Place</button>
+                {/* Convert lots to units when calling onPlace so store receives expected units */}
+                <button onClick={() => onPlace(Math.max(0, computedSizeUnits), riskPercent)} style={{ padding: '8px 12px', background: 'var(--color-accent)', color: 'var(--color-text-inverse)', border: 'none', borderRadius: 6 }}>Place</button>
             </div>
         </div>
     );
