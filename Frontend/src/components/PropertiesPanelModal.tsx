@@ -276,12 +276,12 @@ const PropertiesPanelModal = ({ drawingId, onClose, onDragStart, pricePrecision,
                     <label style={labelStyle}>
                         <span>Stroke Color</span>
                         <input
-                                type="color"
-                                value={rectangle.style.strokeColor}
-                                onChange={handleColorChange}
-                                disabled={readOnly}
-                                style={{ ...inputStyle, padding: '4px', height: '36px', cursor: readOnly ? 'not-allowed' : 'pointer' }}
-                            />
+                            type="color"
+                            value={rectangle.style.strokeColor}
+                            onChange={handleColorChange}
+                            disabled={readOnly}
+                            style={{ ...inputStyle, padding: '4px', height: '36px', cursor: readOnly ? 'not-allowed' : 'pointer' }}
+                        />
                     </label>
                     <label style={labelStyle}>
                         <span>Fill Color</span>
