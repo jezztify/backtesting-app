@@ -50,8 +50,9 @@ const PlaceLimitOrderModal: React.FC<Props> = ({ drawing, equity, pricePrecision
     // Units are affected by leverage: effective units = lots * lotSize * leverage
     const computedSizeLots = size;
     const computedSizeUnits = computedSizeLots;
-    const dollarRisk = unitRisk > 0 ? unitRisk * computedSizeUnits : 0;
-    const dollarReward = tp !== undefined ? Math.abs(tp - entry) * computedSizeUnits : 0;
+    const rrr = unitRisk > 0 && tp !== undefined ? (Math.abs(tp - entry) / unitRisk).toFixed(2) : 'n/a';
+    const dollarRisk = unitRisk > 0 ? unitRisk * computedSizeUnits * lotSize : 0;
+    const dollarReward = tp !== undefined ? dollarRisk * (rrr !== 'n/a' ? Number(rrr) : 0) : 0;
 
     return (
         <div>
@@ -76,6 +77,10 @@ const PlaceLimitOrderModal: React.FC<Props> = ({ drawing, equity, pricePrecision
                 <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
                     <div>Equity</div>
                     <div style={{ fontWeight: 700 }}>${equity.toFixed(2)}</div>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                    <div>Reward/Risk Ratio</div>
+                    <div style={{ fontWeight: 700 }}>{rrr}</div>
                 </div>
             </div>
 
