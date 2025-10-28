@@ -524,10 +524,8 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
 
   const beginPan = useCallback(
     (startX: number, startY: number): PanSession | null => {
-      // Disable panning when playback is active to lock the view
-      if (isPlaying) {
-        return null;
-      }
+      // Allow panning during playback so users can drag the view manually.
+      // Playback-related auto-scrolling respects isPanningRef to avoid fighting the user.
 
       const chart = chartRef.current;
       const series = seriesRef.current;
@@ -594,17 +592,17 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
   }, []);
 
   const endPan = useCallback(() => {
-    isPanningRef.current = false; // Panning ended
+    // Panning ended
+    isPanningRef.current = false;
 
-    // Get the actual visible range after panning
-    if (chartRef.current && candles.length > 0) {
+    // Update the stored playback visible-range size so autoscroll will
+    // use the user's new visible-candles count after they drag/zoom the time axis.
+    if (chartRef.current) {
       const timeScale = chartRef.current.timeScale();
       const visibleLogicalRange = timeScale.getVisibleLogicalRange();
-
       if (visibleLogicalRange) {
-        // The visible range is in logical coordinates (candle indices)
-        const visibleFromIndex = Math.floor(visibleLogicalRange.from);
-        const visibleToIndex = Math.floor(visibleLogicalRange.to);
+        // Store the current visible-range size (number of logical bars)
+        playbackRangeSizeRef.current = visibleLogicalRange.to - visibleLogicalRange.from;
       }
     }
 
@@ -653,6 +651,29 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
 
     chart.timeScale().subscribeVisibleTimeRangeChange(handleVisibleChange);
 
+    // Detect pointer interactions on the container (including axes) so native axis drags
+    // set the panning flag. We use capture on pointerdown to catch events before the chart
+    // consumes them, and listen for pointerup on window to clear the flag.
+    const onPointerDownCapture = () => {
+      isPanningRef.current = true;
+    };
+    const onPointerUp = () => {
+      // Clear panning flag for native pointer interactions (axis drag, etc.)
+      isPanningRef.current = false;
+
+      // Update stored playback visible-range size to match whatever the user left
+      // the chart at after dragging/zooming the time axis. This ensures subsequent
+      // autoscrolls use the user's chosen visible-candles count.
+      if (chartRef.current) {
+        const visibleLogicalRange = chartRef.current.timeScale().getVisibleLogicalRange();
+        if (visibleLogicalRange) {
+          playbackRangeSizeRef.current = visibleLogicalRange.to - visibleLogicalRange.from;
+        }
+      }
+    };
+    containerRef.current.addEventListener('pointerdown', onPointerDownCapture, true);
+    window.addEventListener('pointerup', onPointerUp);
+
     return () => {
       chart.timeScale().unsubscribeVisibleTimeRangeChange(handleVisibleChange);
       if (timeoutId !== null) {
@@ -661,6 +682,8 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
+      containerRef.current?.removeEventListener('pointerdown', onPointerDownCapture, true);
+      window.removeEventListener('pointerup', onPointerUp);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeframe]);
@@ -717,10 +740,12 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
       console.log('Visible timeframe candles:', visibleTimeframeCandlesCount);
 
       // Only autoscroll when a new timeframe candle is created during playback
+      // but don't autoscroll while the user is actively panning (including axis drag)
       if (
         isPlaying &&
         playbackRangeSizeRef.current !== null &&
-        candleCount > prevCandleCountRef.current
+        candleCount > prevCandleCountRef.current &&
+        !isPanningRef.current
       ) {
         // Visible candles increased, scroll to latest
         const paddingOffset = getTimeframePadding(timeframe);
