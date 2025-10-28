@@ -1,95 +1,57 @@
 # Position Tool Guide
 
-## Overview
-The Position Tool allows you to place Long and Short trading positions on the chart with full visualization of Entry, Take Profit, and Stop Loss levels using a rectangle-based interface.
+This guide describes the behaviour and UI of the Position tool (Long / Short) used to create simulated trades on the chart. Implementation points are in `Frontend/src/components/DrawingOverlay.tsx`, `Frontend/src/components/TradingPanel.tsx`, and `Frontend/src/state/tradingStore.ts`.
 
-## Features
+## What the Position Tool does
 
-### Visual Components
-1. **Position Rectangle**
-   - Semi-transparent colored box (green for long, red for short)
-   - Solid border defining the position boundaries
-   - All levels contained within the rectangle
+- Places a visual position on the chart that contains: Entry, Take Profit (TP), and Stop Loss (SL).
+- Supports Long and Short orientation with color-coded visuals (default green for long, red for short).
+- Positions are stored in the `tradingStore` and persisted along with other drawings.
 
-2. **Entry Level**
-   - Solid horizontal line at the entry price
-   - "LONG Entry: [price]" or "SHORT Entry: [price]" label
-   - For long positions: at the bottom of the rectangle
-   - For short positions: at the top of the rectangle
+## Visual elements
 
-3. **Take Profit Level**
-   - Green dashed horizontal line
-   - "TP: [price]" label
-   - The profit target level within the rectangle
+- Position box: semi-transparent rectangle spanning entry↔TP.
+- Entry line: solid horizontal line with an "Entry" label and exact price.
+- TP line: dashed green horizontal line labeled "TP".
+- SL line: dashed red horizontal line labeled "SL".
+- Drag handles: visible when selected — corner handles and side handles for precise adjustment.
 
-4. **Stop Loss Level**
-   - Red dashed horizontal line
-   - "SL: [price]" label
-   - The risk limit (calculated outside the rectangle)
+## Default behavior & risk/reward
 
-### Default Risk/Reward
-When you draw a position rectangle:
-- **Long Position**: 
-  - Entry: Bottom edge of rectangle
-  - Take Profit: Top edge of rectangle
-  - Stop Loss: Calculated at 2:1 risk/reward (50% of the profit distance below entry)
-  
-- **Short Position**:
-  - Entry: Top edge of rectangle
-  - Take Profit: Bottom edge of rectangle
-  - Stop Loss: Calculated at 2:1 risk/reward (50% of the profit distance above entry)
+- By default, drawing a position sets Entry (one edge of the rectangle) and TP (opposite edge). The SL is auto-computed to a default R:R of 2:1 (this can be adjusted in the Properties panel).
+- Defaults are conservative; users can manually edit any of Entry/TP/SL after placement.
 
-This gives a default 2:1 reward-to-risk ratio.
+## How to use
 
-## Usage
+1. Activate the tool: press `L` for Long or `S` for Short (toolbar buttons also available).
+2. Click-and-drag on the chart to define the rectangle. For Long, drag up from entry to target; for Short, drag down.
+3. Release to create the position. The new position is selected automatically.
 
-### Placing Positions
-1. Click the "L" button (Long Position) or "S" button (Short Position) in the toolbar
-2. Click and drag on the chart to define the position box:
-   - **For Long**: Drag upward from entry to take profit
-   - **For Short**: Drag downward from entry to take profit
-3. Release to create the position with automatically calculated stop loss
+While selected:
 
-### Adjusting Levels
-When a position is selected, you'll see multiple handles:
+- Drag inside the box to move the entire position (keeps relative distances).
+- Drag corner handles to resize the box — Entry/TP update to match edges.
+- Use the side handles to fine-tune Entry, TP or SL independently.
+- Right-click and choose "Properties" to set exact numeric values.
 
-1. **Corner Handles** (white circles at corners):
-   - Drag to resize the entire position rectangle
-   - Automatically recalculates entry, TP, and SL based on new bounds
+## Shortcuts & keyboard
 
-2. **Take Profit Handle** (green circle on left edge):
-   - Drag vertically to adjust TP level independently
+- `L` — Activate Long Position tool
+- `S` — Activate Short Position tool
+- `V` or `Esc` — Select tool / cancel current placement
+- `Delete` / `Backspace` — Delete selected position
+- `Cmd/Ctrl + Z` — Undo
+- `Cmd/Ctrl + Shift + Z` — Redo
 
-3. **Stop Loss Handle** (red circle on left edge):
-   - Drag vertically to adjust SL level independently
+## Implementation notes & references
 
-4. **Entry Handle** (colored circle on left edge):
-   - Drag vertically to adjust entry price independently
-
-### Moving Positions
-- Click and drag inside the position rectangle
-- The entire position moves, including all levels (entry, TP, SL)
-- The relative distances between levels are maintained
-
-### Resizing Positions
-- Drag any corner handle to resize the position box
-- Entry and TP adjust based on rectangle edges
-- SL recalculates to maintain 2:1 risk/reward ratio
-
-### Deleting Positions
-- Select the position
-- Press Delete key or use context menu
-
-## Keyboard Shortcuts
-- `L` - Activate Long Position tool
-- `S` - Activate Short Position tool
-- `V` or `Esc` - Return to Select tool
-- `Delete` - Delete selected position
+- Positions are persisted via `persistence.ts` and restored on load.
+- The `tradingStore` holds position objects including timestamps, entry/TP/SL prices, size, and metadata.
+- PnL calculations shown in the `TradingPanel` are estimated based on displayed price and position direction.
 
 ## Tips
-- The larger you draw the rectangle, the larger the profit target
-- Resize the rectangle to quickly adjust your risk/reward setup
-- Use Shift+Click while drawing for horizontal snapping
-- Positions are saved automatically with your drawing state
-- You can undo/redo position placements (Ctrl+Z / Ctrl+Y)
-- Right-click on a position to access Properties panel for precise adjustments
+
+- Use small drags for tight SL/TP testing; larger drags to visualize broader targets.
+- Combine with tick playback (`PlaybackControls`) to test entry timing and slippage visually.
+- Export drawings to JSON for sharing scenarios with teammates.
+   - Drag to resize the entire position rectangle

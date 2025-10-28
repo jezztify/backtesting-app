@@ -578,14 +578,12 @@ const App = () => {
       </header>
       {activeView === 'workspace' && (
         <div className="workspace">
-          <div style={{ minWidth: 260, marginRight: 16 }}>
-            <ToolSidebar
-              datasetLabel={datasetLabel}
-              timeframe={timeframe}
-              onResetSample={handleResetSample}
-              onOpenCanvasSettings={() => setShowCanvasModal(true)}
-            />
-          </div>
+          <ToolSidebar
+            datasetLabel={datasetLabel}
+            timeframe={timeframe}
+            onResetSample={handleResetSample}
+            onOpenCanvasSettings={() => setShowCanvasModal(true)}
+          />
           <div className="chart-area" style={{ flex: 1, minWidth: 0 }}>
             <div className="chart-wrapper">
               <ChartContainer
