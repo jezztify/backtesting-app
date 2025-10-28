@@ -380,7 +380,7 @@ const useResizeObserver = (
 };
 
 
-const ChartContainer = ({ candles, baseTicks, baseTimeframe, playbackIndex, timeframe, isPlaying = false, theme, onChartReady, showCanvasModal, setShowCanvasModal }: ChartContainerProps) => {
+const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackIndex, timeframe, isPlaying = false, theme, onChartReady, showCanvasModal, setShowCanvasModal }: ChartContainerProps) => {
   // Track previous last candle index, playback index, candle count, and visible candles count for autoscroll logic
   const prevLastCandleIdxRef = useRef<number>(-1);
   const prevPlaybackIdxRef = useRef<number>(-1);
@@ -401,6 +401,19 @@ const ChartContainer = ({ candles, baseTicks, baseTimeframe, playbackIndex, time
   const playbackLogicalRangeRef = useRef<{ from: number; to: number } | null>(null); // Store logical range when playback starts
   const playbackRangeSizeRef = useRef<number | null>(null); // Store the range size (number of visible bars) when playback starts
   const priceFormat = useMemo(() => determinePriceFormat(candles), [candles]);
+
+  // Ensure props that should be arrays are actual arrays. Parent may pass null explicitly,
+  // which would bypass parameter defaults — normalize here to avoid runtime .length errors.
+  if (!Array.isArray(candles)) {
+    // eslint-disable-next-line no-param-reassign
+    // @ts-ignore - normalize potential null/undefined to an empty array for internal use
+    candles = [] as Candle[];
+  }
+  if (!Array.isArray(baseTicks)) {
+    // eslint-disable-next-line no-param-reassign
+    // @ts-ignore
+    baseTicks = [] as Candle[];
+  }
 
   // Capture the logical range when playback starts
   useEffect(() => {
@@ -830,6 +843,9 @@ const ChartContainer = ({ candles, baseTicks, baseTimeframe, playbackIndex, time
     };
   }, [renderTick, candles]);
 
+  // Theme colors for the empty-state message
+  const themeColors = useMemo(() => getChartThemeColors(theme), [theme]);
+
   return (
     <div
       className="chart-container"
@@ -846,6 +862,29 @@ const ChartContainer = ({ candles, baseTicks, baseTimeframe, playbackIndex, time
         renderTick={renderTick}
         panHandlers={panHandlers}
       />
+
+      {(baseTicks.length === 0 || candles.length === 0) && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            color: themeColors.text,
+            background: 'transparent',
+            padding: '8px 12px',
+            borderRadius: 8,
+            zIndex: 500,
+            pointerEvents: 'none',
+            fontSize: 16,
+            fontWeight: 600,
+            textAlign: 'center',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Start importing data
+        </div>
+      )}
 
       {showCanvasModal && (
         <div
