@@ -55,6 +55,7 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
     const placeLimitOrder = useTradingStore((s) => (s as any).placeLimitOrder as ((side: any, size: number, price: number, opts?: any) => string));
     const cancelOrder = useTradingStore((s) => (s as any).cancelOrder as ((id: string) => void));
     const updateMarketPrice = useTradingStore((s) => s.updateMarketPrice);
+    const resetAccountStore = useTradingStore((s) => s.reset);
 
     const [collapsed, setCollapsed] = useState<boolean>(false);
     const STORAGE_KEY = 'tradingPanelHeight';
@@ -113,6 +114,21 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
 
     const onTouchEnd = () => stopResize();
     const [activeTab, setActiveTab] = useState<'summary' | 'positions' | 'history' | 'orders'>('summary');
+
+    const handleResetAccount = () => {
+        // reset store state
+        resetAccountStore();
+        // reset UI state
+        setActiveTab('summary');
+        setChartType('equity');
+        setCollapsed(false);
+        setHeight(defaultHeight);
+        try {
+            if (typeof window !== 'undefined') window.localStorage.removeItem(STORAGE_KEY);
+        } catch (e) {
+            // ignore
+        }
+    };
 
     useEffect(() => {
         if (typeof currentPrice === 'number') {
@@ -221,7 +237,25 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                     </div>
                 )}
 
-                <div style={{ fontSize: 12, color: '#374151' }}>{collapsed ? '▲' : '▼'}</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            try {
+                                const ok = typeof window !== 'undefined' ? window.confirm('Reset account? This will clear positions, orders, history and reset balances to starting values.') : false;
+                                if (ok) handleResetAccount();
+                            } catch (err) {
+                                // fallback to direct reset if confirm fails
+                                handleResetAccount();
+                            }
+                        }}
+                        title="Reset account (clears positions, history and account state)"
+                        style={{ padding: '6px 8px', borderRadius: 6, background: '#fff', border: '1px solid #ef4444', color: '#ef4444', cursor: 'pointer' }}
+                    >
+                        Reset Account
+                    </button>
+                    <div style={{ fontSize: 12, color: '#374151' }}>{collapsed ? '▲' : '▼'}</div>
+                </div>
             </div>
 
             {!collapsed && (
