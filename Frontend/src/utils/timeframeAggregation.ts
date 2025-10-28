@@ -25,7 +25,7 @@ export const getTimeframeIntervalSeconds = (timeframe: Timeframe): number => {
 export const alignTimestampToTimeframe = (timestamp: number, timeframe: Timeframe): number => {
   const interval = getTimeframeIntervalSeconds(timeframe);
 
-  // For Daily, Weekly, Monthly we need special handling
+  // For Daily, Weekly, Monthly we need special handling (use UTC alignment)
   if (timeframe === 'Daily' || timeframe === 'Weekly' || timeframe === 'Monthly') {
     const date = new Date(timestamp * 1000);
 

@@ -589,7 +589,14 @@ const App = () => {
             <div className="chart-wrapper">
               <ChartContainer
                 candles={candles}
-                playbackIndex={displayPlaybackIndex}
+                // Pass the raw playbackIndex (in base tick units) so the chart
+                // can re-aggregate base ticks up to the correct tick when
+                // building the visible dataset. Previously this passed the
+                // derived displayPlaybackIndex which is an index into the
+                // already-aggregated display candles; that caused mismatches
+                // when the chart re-aggregated using the wrong index and led
+                // to the inconsistent dates observed when switching timeframes.
+                playbackIndex={playbackIndex}
                 timeframe={timeframe}
                 isPlaying={isPlaying}
                 theme={effectiveTheme}
