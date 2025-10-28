@@ -235,6 +235,8 @@ interface CanvasPosition extends CanvasDrawingBase {
   start: { x: number; y: number };
   end: { x: number; y: number };
   rect: { x: number; y: number; width: number; height: number };
+  takeProfit?: { x: number; y: number };
+  stopLoss?: { x: number; y: number };
 }
 
 type CanvasDrawing = CanvasRectangle | CanvasTrendline | CanvasPosition;
@@ -293,33 +295,127 @@ const DrawingOverlay = ({ width, height, converters, renderTick, panHandlers }: 
       .map<CanvasDrawing | null>((drawing) => {
         // Handle position types
         if (drawing.type === 'long' || drawing.type === 'short') {
-          const point = converters.toCanvas(drawing.point);
-          const start = converters.toCanvas(drawing.start);
-          const end = converters.toCanvas(drawing.end);
+          const timeCandidates = Array.from(
+            new Set(
+              [drawing.point.time, drawing.start.time, drawing.end.time].filter(
+                (value): value is number => Number.isFinite(value)
+              )
+            )
+          );
 
-          if (!point || !start || !end) {
+          const convertWithFallback = (price: number, preferredTime?: number) => {
+            const orderedTimes = preferredTime === undefined
+              ? timeCandidates
+              : [preferredTime, ...timeCandidates.filter((time) => time !== preferredTime)];
+
+            for (const time of orderedTimes) {
+              const coords = converters.toCanvas({ time, price });
+              if (coords) {
+                return coords;
+              }
+            }
+            return null;
+          };
+
+          const start = convertWithFallback(drawing.start.price, drawing.start.time);
+          const end = convertWithFallback(drawing.end.price, drawing.end.time);
+          const pointCandidate = convertWithFallback(drawing.point.price, drawing.point.time);
+
+          const anchor = pointCandidate ?? start ?? end;
+          if (!anchor || !Number.isFinite(anchor.x) || !Number.isFinite(anchor.y)) {
             return null;
           }
 
-          // Calculate rectangle bounds
+          const MIN_W = MIN_POSITION_PIXEL_WIDTH;
+          const MIN_H = MIN_POSITION_PIXEL_HEIGHT;
+
+          if (!start || !end) {
+            const rectW = MIN_W;
+            const rectH = MIN_H;
+            const rectX = Math.max(0, Math.min(width - rectW, anchor.x - rectW / 2));
+            const rectY = Math.max(0, Math.min(height - rectH, anchor.y - rectH / 2));
+
+            const centerX = rectX + rectW / 2;
+            const centerY = rectY + rectH / 2;
+
+            const takeProfitPoint = drawing.takeProfit !== undefined
+              ? {
+                x: centerX,
+                y: drawing.type === 'long' ? rectY : rectY + rectH,
+              }
+              : undefined;
+
+            const stopLossPoint = drawing.stopLoss !== undefined
+              ? {
+                x: centerX,
+                y: drawing.type === 'long' ? rectY + rectH : rectY,
+              }
+              : undefined;
+
+            return {
+              drawing,
+              point: pointCandidate ?? { x: centerX, y: centerY },
+              start: { x: rectX, y: rectY },
+              end: { x: rectX + rectW, y: rectY + rectH },
+              rect: { x: rectX, y: rectY, width: rectW, height: rectH },
+              takeProfit: takeProfitPoint,
+              stopLoss: stopLossPoint,
+            } satisfies CanvasPosition;
+          }
+
           const clippedX = Math.max(0, Math.min(start.x, end.x, width));
           const clippedY = Math.max(0, Math.min(start.y, end.y, height));
           const clippedX2 = Math.min(width, Math.max(start.x, end.x, 0));
           const clippedY2 = Math.min(height, Math.max(start.y, end.y, 0));
 
-          const rect = {
-            x: clippedX,
-            y: clippedY,
-            width: clippedX2 - clippedX,
-            height: clippedY2 - clippedY,
-          };
+          let rectX = clippedX;
+          let rectY = clippedY;
+          let rectW = clippedX2 - clippedX;
+          let rectH = clippedY2 - clippedY;
 
-          // If rectangle is completely outside bounds, don't render it
-          if (rect.width <= 0 || rect.height <= 0) {
-            return null;
+          if (rectW <= 0) {
+            rectW = MIN_W;
+            rectX = Math.max(0, Math.min(width - rectW, anchor.x - rectW / 2));
           }
 
-          return { drawing, point, start, end, rect } satisfies CanvasPosition;
+          if (rectH <= 0) {
+            rectH = MIN_H;
+            rectY = Math.max(0, Math.min(height - rectH, anchor.y - rectH / 2));
+          }
+
+          const rect = { x: rectX, y: rectY, width: rectW, height: rectH };
+          const point = pointCandidate ?? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+
+          const clampY = (value: number) => Math.max(0, Math.min(height, value));
+          const centerX = rect.x + rect.width / 2;
+
+          let takeProfitPoint = drawing.takeProfit !== undefined
+            ? convertWithFallback(drawing.takeProfit)
+            : null;
+          if (!takeProfitPoint && drawing.takeProfit !== undefined) {
+            const fallbackY = drawing.type === 'long' ? rect.y : rect.y + rect.height;
+            takeProfitPoint = { x: centerX, y: clampY(fallbackY) };
+          }
+
+          let stopLossPoint = drawing.stopLoss !== undefined
+            ? convertWithFallback(drawing.stopLoss)
+            : null;
+          if (!stopLossPoint && drawing.stopLoss !== undefined) {
+            const baseY = drawing.type === 'long' ? rect.y + rect.height : rect.y;
+            const direction = drawing.type === 'long' ? 1 : -1;
+            const fallbackY = clampY(baseY + direction * Math.max(MIN_H, rect.height / 2));
+            stopLossPoint = { x: centerX, y: fallbackY };
+          }
+
+          return {
+            drawing,
+            point,
+            start,
+            end,
+            rect,
+            takeProfit: takeProfitPoint ?? undefined,
+            stopLoss: stopLossPoint ?? undefined,
+          } satisfies CanvasPosition;
         }
 
         // Handle rectangle and trendline types (both have start and end)
@@ -405,31 +501,25 @@ const DrawingOverlay = ({ width, height, converters, renderTick, panHandlers }: 
           const drawing = item.drawing as PositionDrawing;
           const { left: leftX, right: rightX } = getPositionHandleXs(item.rect);
 
-          if (drawing.takeProfit !== undefined) {
-            const tpCanvas = converters.toCanvas({ time: drawing.point.time, price: drawing.takeProfit });
-            if (tpCanvas) {
-              const leftDistance = Math.hypot(canvasPoint.x - leftX, canvasPoint.y - tpCanvas.y);
-              const rightDistance = Math.hypot(canvasPoint.x - rightX, canvasPoint.y - tpCanvas.y);
-              if (leftDistance <= HANDLE_RADIUS + 2) {
-                return { drawingId: item.drawing.id, handle: 'takeProfit', side: 'left' };
-              }
-              if (rightDistance <= HANDLE_RADIUS + 2) {
-                return { drawingId: item.drawing.id, handle: 'takeProfit', side: 'right' };
-              }
+          if (drawing.takeProfit !== undefined && item.takeProfit) {
+            const leftDistance = Math.hypot(canvasPoint.x - leftX, canvasPoint.y - item.takeProfit.y);
+            const rightDistance = Math.hypot(canvasPoint.x - rightX, canvasPoint.y - item.takeProfit.y);
+            if (leftDistance <= HANDLE_RADIUS + 2) {
+              return { drawingId: item.drawing.id, handle: 'takeProfit', side: 'left' };
+            }
+            if (rightDistance <= HANDLE_RADIUS + 2) {
+              return { drawingId: item.drawing.id, handle: 'takeProfit', side: 'right' };
             }
           }
 
-          if (drawing.stopLoss !== undefined) {
-            const slCanvas = converters.toCanvas({ time: drawing.point.time, price: drawing.stopLoss });
-            if (slCanvas) {
-              const leftDistance = Math.hypot(canvasPoint.x - leftX, canvasPoint.y - slCanvas.y);
-              const rightDistance = Math.hypot(canvasPoint.x - rightX, canvasPoint.y - slCanvas.y);
-              if (leftDistance <= HANDLE_RADIUS + 2) {
-                return { drawingId: item.drawing.id, handle: 'stopLoss', side: 'left' };
-              }
-              if (rightDistance <= HANDLE_RADIUS + 2) {
-                return { drawingId: item.drawing.id, handle: 'stopLoss', side: 'right' };
-              }
+          if (drawing.stopLoss !== undefined && item.stopLoss) {
+            const leftDistance = Math.hypot(canvasPoint.x - leftX, canvasPoint.y - item.stopLoss.y);
+            const rightDistance = Math.hypot(canvasPoint.x - rightX, canvasPoint.y - item.stopLoss.y);
+            if (leftDistance <= HANDLE_RADIUS + 2) {
+              return { drawingId: item.drawing.id, handle: 'stopLoss', side: 'left' };
+            }
+            if (rightDistance <= HANDLE_RADIUS + 2) {
+              return { drawingId: item.drawing.id, handle: 'stopLoss', side: 'right' };
             }
           }
 
@@ -457,7 +547,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, panHandlers }: 
       }
       return null;
     },
-    [canvasDrawings, converters]
+    [canvasDrawings]
   );
 
   const hitTestDrawings = useCallback(
@@ -996,20 +1086,9 @@ const DrawingOverlay = ({ width, height, converters, renderTick, panHandlers }: 
           const stopLossFillOpacity = drawing.style.stopLossFillOpacity ?? 0.15;
 
           // Calculate take profit and stop loss coordinates
-          let takeProfitY: number | null = null;
-          let stopLossY: number | null = null;
-          let entryY = item.point.y;
-
-          if (drawing.takeProfit !== undefined) {
-            const tpCanvas = converters.toCanvas({ time: drawing.point.time, price: drawing.takeProfit });
-            if (tpCanvas) takeProfitY = tpCanvas.y;
-          }
-
-          if (drawing.stopLoss !== undefined) {
-            const slCanvas = converters.toCanvas({ time: drawing.point.time, price: drawing.stopLoss });
-            if (slCanvas) stopLossY = slCanvas.y;
-          }
-
+          const entryY = item.point.y;
+          const takeProfitY: number | null = item.takeProfit?.y ?? null;
+          const stopLossY: number | null = item.stopLoss?.y ?? null;
           const lineStartX = item.rect.x;
           const lineEndX = item.rect.x + item.rect.width;
 

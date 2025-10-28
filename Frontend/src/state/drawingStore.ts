@@ -9,6 +9,7 @@ import {
   PositionDrawing,
 } from '../types/drawings';
 import { cloneDrawingList } from '../utils/geometry';
+import { saveWorkspaceState, loadWorkspaceState } from '../services/persistence';
 
 export const defaultRectangleStyle = {
   strokeColor: '#2962ff',
@@ -187,15 +188,26 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
       const reward = takeProfit - entryPrice;
       const stopLoss = entryPrice - (reward / 2); // 2:1 risk/reward
 
+      // Ensure a minimum horizontal span so the position rectangle is visible
+      const startTime = Math.min(draft.start.time, draft.end.time);
+      const endTime = Math.max(draft.start.time, draft.end.time);
+      const MIN_TIME_DELTA = 1; // seconds - small non-zero span
+      const normalizedStart = { ...draft.start };
+      const normalizedEnd = { ...draft.end };
+      if (startTime === endTime) {
+        normalizedStart.time = startTime - MIN_TIME_DELTA;
+        normalizedEnd.time = endTime + MIN_TIME_DELTA;
+      }
+
       drawing = {
         id: generateId(),
         type: 'long',
         point: {
-          time: (draft.start.time + draft.end.time) / 2, // Center horizontally
+          time: (normalizedStart.time + normalizedEnd.time) / 2, // Center horizontally
           price: entryPrice
         },
-        start: { ...draft.start },
-        end: { ...draft.end },
+        start: { ...normalizedStart },
+        end: { ...normalizedEnd },
         stopLoss,
         takeProfit,
         style: { ...state.lastLongStyle },
@@ -210,15 +222,26 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
       const reward = entryPrice - takeProfit;
       const stopLoss = entryPrice + (reward / 2); // 2:1 risk/reward
 
+      // Ensure a minimum horizontal span so the position rectangle is visible
+      const startTimeS = Math.min(draft.start.time, draft.end.time);
+      const endTimeS = Math.max(draft.start.time, draft.end.time);
+      const MIN_TIME_DELTA_S = 1; // seconds
+      const normalizedStartS = { ...draft.start };
+      const normalizedEndS = { ...draft.end };
+      if (startTimeS === endTimeS) {
+        normalizedStartS.time = startTimeS - MIN_TIME_DELTA_S;
+        normalizedEndS.time = endTimeS + MIN_TIME_DELTA_S;
+      }
+
       drawing = {
         id: generateId(),
         type: 'short',
         point: {
-          time: (draft.start.time + draft.end.time) / 2, // Center horizontally
+          time: (normalizedStartS.time + normalizedEndS.time) / 2, // Center horizontally
           price: entryPrice
         },
-        start: { ...draft.start },
-        end: { ...draft.end },
+        start: { ...normalizedStartS },
+        end: { ...normalizedEndS },
         stopLoss,
         takeProfit,
         style: { ...state.lastShortStyle },
@@ -234,6 +257,20 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
       revision: state.revision + 1,
       activeTool: 'select',
     }));
+
+    // Persist workspace immediately so new drawings survive reloads and
+    // are not lost if the user navigates away. Preserve the existing
+    // playbackIndex from storage when available, otherwise default to 0.
+    try {
+      const dsId = get().datasetId || 'default';
+      const persisted = loadWorkspaceState(dsId);
+      const playbackIndex = persisted?.playbackIndex ?? 0;
+      saveWorkspaceState(dsId, { drawings: get().drawings, playbackIndex });
+    } catch (err) {
+      // Non-fatal: persistence failure shouldn't stop normal operation
+      // eslint-disable-next-line no-console
+      console.warn('Failed to persist workspace after commitDraft', err);
+    }
   },
   cancelDraft: () => set({ draft: null }),
   loadSnapshot: (drawings) =>

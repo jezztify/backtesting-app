@@ -452,7 +452,6 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
 
   // Expose scroll API to parent
   const scrollToIndex = useCallback((index: number, visibleCandles: number = 100) => {
-    console.log('Scrolling to index:', index, 'with', visibleCandles, 'visible candles');
     if (!chartRef.current || candles.length === 0) {
       return;
     }
@@ -737,7 +736,6 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
         const toIdx = Math.min(aggregatedCandles.length, Math.ceil(visibleLogicalRange.to) - paddingOffset);
         visibleTimeframeCandlesCount = Math.max(0, toIdx - fromIdx);
       }
-      console.log('Visible timeframe candles:', visibleTimeframeCandlesCount);
 
       // Only autoscroll when a new timeframe candle is created during playback
       // but don't autoscroll while the user is actively panning (including axis drag)

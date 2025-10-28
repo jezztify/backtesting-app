@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import ChartContainer from './components/ChartContainer';
 import MarketDataPanel from './components/MarketDataPanel';
 import ToolSidebar from './components/ToolSidebar';
+import TradingPanel from './components/TradingPanel';
 import PlaybackControls, { TickRate } from './components/PlaybackControls';
 // import PropertiesPanel from './components/PropertiesPanel';
 import DataLoader from './components/DataLoader';
@@ -116,6 +117,9 @@ const App = () => {
   }, [useTickPlayback, displayCandles.length, playbackIndex]);
 
   useEffect(() => {
+    // Load workspace state once when the dataset changes (do not reload on playback
+    // updates like `candles.length` because that would overwrite user drawings while
+    // playing back ticks).
     setDatasetIdInStore(datasetId);
     const persisted = loadWorkspaceState(datasetId);
     if (persisted) {
@@ -128,7 +132,10 @@ const App = () => {
       loadSnapshot([]);
       setPlaybackIndex(Math.max(candles.length - 1, 0));
     }
-  }, [datasetId, candles.length, loadSnapshot, setDatasetIdInStore]);
+    // Intentionally only run when datasetId changes or when the snapshot-related
+    // functions change. Removing `candles.length` avoids clearing drawings during
+    // normal playback updates.
+  }, [datasetId, loadSnapshot, setDatasetIdInStore]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -611,6 +618,9 @@ const App = () => {
                 onTickSourceChange={handleTickSourceChange}
                 onJumpToCurrent={handleJumpToCurrent}
               />
+              <div style={{ marginTop: 12 }}>
+                <TradingPanel currentPrice={displayCandles[displayPlaybackIndex]?.close} />
+              </div>
             </div>
           </div>
           {/* PropertiesPanel removed; now shown as modal in DrawingOverlay */}
