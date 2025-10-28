@@ -649,15 +649,7 @@ const App = () => {
       )}
       {activeView === 'marketData' && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', width: '100%' }}>
-          <div style={{ marginBottom: 32 }}>
-            <button
-              style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: '#e5e7eb', color: '#111', fontWeight: 500, cursor: 'pointer' }}
-              onClick={() => setActiveView('workspace')}
-            >
-              ← Back to Workspace
-            </button>
-          </div>
-          <MarketDataPanel />
+          <MarketDataPanel onBack={() => setActiveView('workspace')} />
         </div>
       )}
     </div>

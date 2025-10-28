@@ -196,7 +196,7 @@ async function fetchTwelveDataChunked(symbol: string, interval: string, apiKey: 
     return { meta, values: deduped, status: 'ok' };
 }
 
-const MarketDataPanel: React.FC = () => {
+const MarketDataPanel: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
     const [selectedProvider, setSelectedProvider] = useState(PROVIDERS[0].id);
     const [apiKey, setApiKey] = useState('');
     const [symbol, setSymbol] = useState('EURUSD');
@@ -259,7 +259,17 @@ const MarketDataPanel: React.FC = () => {
 
     return (
         <div style={{ padding: 20, maxWidth: 480, background: '#f9fafb', borderRadius: 10, boxShadow: '0 2px 8px #0001' }}>
-            <h2>Market Data</h2>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <h2 style={{ margin: 0 }}>Market Data</h2>
+                {onBack && (
+                    <button
+                        onClick={onBack}
+                        style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: '#e5e7eb', color: '#111', fontWeight: 500, cursor: 'pointer' }}
+                    >
+                        ← Back to Workspace
+                    </button>
+                )}
+            </div>
             <label style={{ display: 'block', marginBottom: 10 }}>
                 Provider:
                 <select value={selectedProvider} onChange={(e) => setSelectedProvider(e.target.value)} style={{ marginLeft: 10 }}>
