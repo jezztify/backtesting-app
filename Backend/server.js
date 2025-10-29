@@ -42,6 +42,14 @@ app.get('/api/dukascopy/historical', async (req, res) => {
     try {
         const { instrument, from, to, timeframe, page, chunkDays } = req.query;
         console.log('[dukascopy] incoming request', { instrument, from, to, timeframe, page, chunkDays });
+        // per-request id for easier tracing in logs
+        const reqId = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+        // logger: prints extra meta when VERBOSE=1 or ?verbose=true is provided
+        const isVerbose = process.env.VERBOSE === '1' || String(req.query.verbose) === 'true';
+        const logger = (msg, meta) => {
+            if (isVerbose) console.log(`[dukascopy] ${new Date().toISOString()} [${reqId}] ${msg}`, meta || '');
+            else console.log(`[dukascopy] ${new Date().toISOString()} [${reqId}] ${msg}`);
+        };
         if (!instrument || !from || !to) return res.status(400).json({ error: 'instrument, from and to are required' });
         if (!isValidDateString(from) || !isValidDateString(to)) return res.status(400).json({ error: 'invalid from/to date' });
 
@@ -116,39 +124,80 @@ app.get('/api/dukascopy/historical', async (req, res) => {
         // make the toDate inclusive to match user expectations (end of day)
         const inclusiveToDate = endOfDay(toDate);
         const fromISO = fromDate.toISOString();
-        const toISO = toDate.toISOString();
+        const toISO = inclusiveToDate.toISOString();
         const fullKey = cacheKey(instr, fromISO, toISO, tf);
         const now = Date.now();
         if (cache.has(fullKey)) {
             const entry = cache.get(fullKey);
             if (now - entry.ts < CACHE_TTL_MS) {
-                console.log('[dukascopy] full-range cache hit', { fullKey });
+                logger('full-range cache hit', { fullKey });
                 return res.json(entry.values);
             } else {
-                console.log('[dukascopy] full-range cache stale, refetching', { fullKey });
+                logger('full-range cache stale, refetching', { fullKey });
             }
         }
 
-        console.log('[dukascopy] fetching full range from Dukascopy', { instrument: instr, from: fromDate.toISOString(), to: inclusiveToDate.toISOString(), timeframe: tf });
-        const t0 = Date.now();
-        const result = await getHistoricalRates({
-            instrument: instr,
-            dates: { from: fromDate, to: inclusiveToDate },
-            timeframe: tf,
-            format: 'json'
-        });
-        const took = Date.now() - t0;
-        console.log('[dukascopy] full-range fetch complete', { fullKey, tookMs: took });
+        // Chunked fetching for full-range to provide progress logs and avoid
+        // single huge requests. chunkDays query param controls chunk size.
+        const msPerDay = 24 * 60 * 60 * 1000;
+        const totalDays = Math.ceil((inclusiveToDate.getTime() - fromDate.getTime() + 1) / msPerDay);
+        const totalChunks = Math.max(1, Math.ceil(totalDays / chunk));
 
-        let values = [];
-        if (result) {
-            if (Array.isArray(result)) values = result;
-            else if (Array.isArray(result.values)) values = result.values;
-            else values = [];
+        logger('starting chunked full-range fetch', { instrument: instr, from: fromISO, to: toISO, timeframe: tf, chunkDays: chunk, totalDays, totalChunks });
+
+        const allValues = [];
+        let fetchedCount = 0;
+        for (let pg = 0; pg < totalChunks; pg++) {
+            const chunkStart = addDays(fromDate, pg * chunk);
+            if (chunkStart > inclusiveToDate) break;
+            const chunkEnd = addDays(chunkStart, chunk - 1);
+            let effectiveEnd = chunkEnd > inclusiveToDate ? inclusiveToDate : chunkEnd;
+            // make end inclusive
+            effectiveEnd = endOfDay(effectiveEnd);
+
+            const chunkFromISO = chunkStart.toISOString();
+            const chunkToISO = effectiveEnd.toISOString();
+            const chunkKey = cacheKey(instr, chunkFromISO, chunkToISO, tf);
+
+            if (cache.has(chunkKey)) {
+                const entry = cache.get(chunkKey);
+                if (Date.now() - entry.ts < CACHE_TTL_MS) {
+                    logger('chunk cache hit', { chunk: pg, chunkKey, count: entry.values.length });
+                    allValues.push(...entry.values);
+                    fetchedCount += entry.values.length;
+                    logger('progress', { chunk: pg, fetchedChunks: pg + 1, totalChunks, fetchedCount, percent: Math.round(((pg + 1) / totalChunks) * 100) });
+                    continue;
+                } else {
+                    logger('chunk cache stale, will refetch', { chunk: pg, chunkKey });
+                }
+            }
+
+            logger('fetching chunk from Dukascopy', { chunk: pg, from: chunkFromISO, to: chunkToISO, timeframe: tf });
+            const t0Chunk = Date.now();
+            const result = await getHistoricalRates({
+                instrument: instr,
+                dates: { from: chunkStart, to: effectiveEnd },
+                timeframe: tf,
+            });
+            const tookMs = Date.now() - t0Chunk;
+
+            let values = [];
+            if (result) {
+                if (Array.isArray(result)) values = result;
+                else if (Array.isArray(result.values)) values = result.values;
+                else if (typeof result === 'object') values = result.values && Array.isArray(result.values) ? result.values : [];
+            }
+
+            cache.set(chunkKey, { ts: Date.now(), values });
+            allValues.push(...values);
+            fetchedCount += values.length;
+            logger('chunk fetch complete', { chunk: pg, tookMs, chunkCount: values.length, fetchedCount, fetchedChunks: pg + 1, totalChunks, percent: Math.round(((pg + 1) / totalChunks) * 100) });
         }
-        cache.set(fullKey, { ts: now, values });
-        console.log('[dukascopy] full-range cache set', { fullKey, count: values.length });
-        return res.json({ values, status: 'ok' });
+
+        // cache aggregated full-range result for quick future responses
+        cache.set(fullKey, { ts: Date.now(), values: allValues });
+        logger('full-range fetch complete', { fullKey, totalCount: allValues.length });
+        return res.json({ values: allValues, status: 'ok' });
     } catch (err) {
         console.error('Error in dukascopy proxy:', err);
         res.status(500).json({ error: err && err.message ? err.message : String(err) });

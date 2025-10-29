@@ -214,5 +214,5 @@ function computePnlForPosition(pos: Position, price: number) {
     // Simple P&L = (price - entry) * size for long, inverted for short
     const delta = price - pos.entryPrice;
     const signed = pos.side === 'long' ? delta : -delta;
-    return signed * pos.size;
+    return signed * pos.size * useTradingStore.getState().lotSize;
 }
