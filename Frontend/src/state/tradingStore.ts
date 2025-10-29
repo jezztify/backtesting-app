@@ -30,7 +30,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     realizedPnl: 0,
     unrealizedPnl: 0,
     equity: 10000,
-    leverage: 1,
+    leverage: 100,
     lotSize: 100000,
     positions: [],
     history: [],
@@ -214,5 +214,9 @@ function computePnlForPosition(pos: Position, price: number) {
     // Simple P&L = (price - entry) * size for long, inverted for short
     const delta = price - pos.entryPrice;
     const signed = pos.side === 'long' ? delta : -delta;
-    return signed * pos.size * useTradingStore.getState().lotSize;
+    // `pos.size` is stored as units (base currency units). PnL is delta * units.
+    // Historically this code multiplied by lotSize (treating size as lots). The app
+    // stores sizes in units (consistent with the UI and other calculations), so
+    // remove the extra multiplication here.
+    return signed * pos.size;
 }
