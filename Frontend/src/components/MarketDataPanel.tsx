@@ -1,3 +1,4 @@
+import type { Instrument } from 'dukascopy-node';
 import React, { useEffect, useState } from 'react';
 
 // Small helpers
@@ -112,8 +113,52 @@ function addInterval(date: Date, interval: string) {
     return d;
 }
 
+function normalizeDukascopyValues(values: any[]) {
+    // Dukascopy sample format: { timestamp: 1759276800000, open: 1.17342, high: ..., low: ..., close: ..., volume: ... }
+    // Normalize to the frontend's expected shape: { datetime: 'YYYY-MM-DD HH:mm:ss', open: '...', high: '...', low: '...', close: '...', volume: '...'}
+    if (!Array.isArray(values)) return [];
+    return values
+        .map((v) => {
+            if (v == null) return null;
+            // find a timestamp value (try multiple common keys)
+            let ts: number | null = null;
+            const cand = v.timestamp ?? v.time ?? v.t ?? v.datetime ?? v.date ?? null;
+            if (typeof cand === 'number') ts = cand;
+            else if (typeof cand === 'string' && cand.match(/^\d+$/)) ts = Number(cand);
+            else if (typeof cand === 'string' && isNaN(Number(cand))) {
+                // try parsing ISO-like strings
+                const parsed = Date.parse(cand);
+                if (!Number.isNaN(parsed)) ts = parsed;
+            }
+
+            if (ts != null) {
+                // heuristics: if timestamp looks like seconds (10 digits), convert to ms
+                if (ts > 0 && ts < 1e11) ts = ts * 1000;
+                // if it's absurdly large (microseconds), reduce to ms
+                if (ts > 1e15) ts = Math.floor(ts / 1000);
+            }
+
+            const openVal = v.open ?? v.o ?? v.Open ?? null;
+            const highVal = v.high ?? v.h ?? v.High ?? null;
+            const lowVal = v.low ?? v.l ?? v.Low ?? null;
+            const closeVal = v.close ?? v.c ?? v.Close ?? null;
+            const volumeVal = v.volume ?? v.v ?? v.Volume ?? null;
+
+            if (ts == null || openVal == null || highVal == null || lowVal == null || closeVal == null) return null;
+
+            const dtStr = new Date(Number(ts)).toISOString().replace('T', ' ').slice(0, 19);
+            const open = String(openVal);
+            const high = String(highVal);
+            const low = String(lowVal);
+            const close = String(closeVal);
+            const volume = volumeVal != null ? String(volumeVal) : '';
+            return { datetime: dtStr, open, high, low, close, volume };
+        })
+        .filter((x) => x !== null) as any[];
+}
+
 // Providers: only Twelve Data for now
-const PROVIDERS = [{ id: 'twelve_data', name: 'Twelve Data' }];
+const PROVIDERS = [{ id: 'dukascopy', name: 'Dukascopy' }, { id: 'twelve_data', name: 'Twelve Data' }];
 
 // Storage helpers
 const saveApiKey = (providerId: string, apiKey: string) => {
@@ -199,12 +244,12 @@ async function fetchTwelveDataChunked(symbol: string, interval: string, apiKey: 
 const MarketDataPanel: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
     const [selectedProvider, setSelectedProvider] = useState(PROVIDERS[0].id);
     const [apiKey, setApiKey] = useState('');
-    const [symbol, setSymbol] = useState('EURUSD');
-    const [interval, setInterval] = useState('1day');
-    const [aggInterval, setAggInterval] = useState('1day');
+    const [symbol, setSymbol] = useState('EUR/USD');
+    const [interval, setInterval] = useState('1min');
+    const [aggInterval, setAggInterval] = useState('1min');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
-    const [useChunked, setUseChunked] = useState(true);
+    const [useChunked, setUseChunked] = useState(false);
     const [status, setStatus] = useState('');
     const [fetchedData, setFetchedData] = useState<any>(null);
 
@@ -237,8 +282,107 @@ const MarketDataPanel: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                     data = json;
                 }
                 if (data && data.values && aggInterval && aggInterval !== interval) data = { ...data, values: aggregateOHLCV(data.values, interval, aggInterval) };
+            } else if (selectedProvider === 'dukascopy') {
+                // Call the backend proxy which runs dukascopy-node. Use the
+                // Vite env var VITE_BACKEND_URL if provided, otherwise default
+                // to http://localhost:3001.
+                const backend = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3001';
+
+                // helper to safely parse JSON responses and provide better errors
+                const parseJsonSafe = async (res: Response) => {
+                    const text = await res.text();
+                    if (!text) throw new Error(`Empty response body from proxy (status ${res.status})`);
+                    try {
+                        return JSON.parse(text);
+                    } catch (err) {
+                        throw new Error(`Invalid JSON from proxy (status ${res.status}): ${text.slice(0, 200)}`);
+                    }
+                };
+
+                if (useChunked && startDate && endDate) {
+                    // Chunked fetch: call backend per-page and show progress
+                    const start = new Date(startDate);
+                    const end = new Date(endDate);
+                    const chunkDays = 5;
+                    const msPerDay = 24 * 60 * 60 * 1000;
+                    const totalDays = Math.ceil((end.getTime() - start.getTime()) / msPerDay) + 1;
+                    const totalPages = Math.max(1, Math.ceil(totalDays / chunkDays));
+                    const allValues: any[] = [];
+                    for (let pg = 0; pg < totalPages; pg++) {
+                        setStatus(`Fetching Dukascopy chunk ${pg + 1} of ${totalPages}...`);
+                        const params = new URLSearchParams({
+                            instrument: symbol.replace('/', '').toLowerCase(),
+                            from: startDate,
+                            to: endDate,
+                            timeframe: 'm1',
+                            page: String(pg),
+                            chunkDays: String(chunkDays),
+                        } as any);
+                        const url = `${String(backend).replace(/\/+$/, '')}/api/dukascopy/historical?${params.toString()}`;
+                        const res = await fetch(url);
+                        if (!res.ok) {
+                            const txt = await res.text().catch(() => '');
+                            throw new Error(`Dukascopy proxy error: ${res.status} ${res.statusText} ${txt}`);
+                        }
+                        const json = await parseJsonSafe(res);
+                        const vals = Array.isArray(json?.values) ? json.values : (json?.values || []);
+                        allValues.push(...vals);
+                        if (json.done) break;
+                        // pause briefly to be polite
+                        await sleep(200);
+                    }
+                    // dedupe by datetime
+                    const seen = new Set();
+                    const deduped = allValues.filter((v) => {
+                        if (!v || !v.datetime) return false;
+                        if (seen.has(v.datetime)) return false;
+                        seen.add(v.datetime);
+                        return true;
+                    });
+                    deduped.sort((a, b) => new Date(a.datetime.replace(' ', 'T')).getTime() - new Date(b.datetime.replace(' ', 'T')).getTime());
+                    data = { values: deduped, status: 'ok' };
+                } else {
+                    const params = new URLSearchParams({
+                        instrument: symbol.replace('/', '').toLowerCase(),
+                        from: startDate,
+                        to: endDate,
+                        timeframe: 'm1',
+                    } as any);
+                    const url = `${String(backend).replace(/\/+$/, '')}/api/dukascopy/historical?${params.toString()}`;
+                    const res = await fetch(url);
+                    if (!res.ok) {
+                        const txt = await res.text().catch(() => '');
+                        throw new Error(`Dukascopy proxy error: ${res.status} ${res.statusText} ${txt}`);
+                    }
+                    const json = await parseJsonSafe(res);
+                    // backend returns either values array or the raw dukascopy result
+                    if (Array.isArray(json)) data = { values: json, status: 'ok' };
+                    else data = json;
+                }
             } else {
                 throw new Error('Provider not implemented');
+            }
+            // Normalize dukascopy-style payloads (timestamp-based) to the frontend format
+            try {
+                if (data) {
+                    // backend may return { values: [...] } or { values: [], status: 'ok' } or an array
+                    let vals: any[] = [];
+                    if (Array.isArray(data)) vals = data;
+                    else if (Array.isArray(data.values)) vals = data.values;
+                    else if (Array.isArray(data.data)) vals = data.data;
+
+                    if (vals.length > 0 && (vals[0].timestamp || vals[0].datetime)) {
+                        const normalized = normalizeDukascopyValues(vals);
+                        if (normalized.length === 0) {
+                            setStatus('No valid candles found in response');
+                        } else {
+                            data = { values: normalized, status: data.status || 'ok' };
+                        }
+                    }
+                }
+            } catch (err) {
+                // fall back to raw data if normalization fails
+                console.warn('Normalization failed', err);
             }
             setFetchedData(data);
             setStatus('Data fetched!');
@@ -281,20 +425,20 @@ const MarketDataPanel: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                 </select>
             </label>
 
-            <label style={{ display: 'block', marginBottom: 10 }}>
+            {selectedProvider !== 'dukascopy' && <label style={{ display: 'block', marginBottom: 10 }}>
                 API Key:
                 <input type="text" value={apiKey} onChange={(e) => setApiKey(e.target.value)} style={{ marginLeft: 10, width: 200 }} />
                 <button onClick={handleSaveKey} style={{ marginLeft: 8 }}>
                     Save
                 </button>
-            </label>
+            </label>}
 
             <label style={{ display: 'block', marginBottom: 10 }}>
                 Symbol:
                 <input type="text" value={symbol} onChange={(e) => setSymbol(e.target.value)} style={{ marginLeft: 10, width: 140 }} />
             </label>
 
-            <label style={{ display: 'block', marginBottom: 10 }}>
+            {selectedProvider !== 'dukascopy' && <label style={{ display: 'block', marginBottom: 10 }}>
                 Interval:
                 <select value={interval} onChange={(e) => setInterval(e.target.value)} style={{ marginLeft: 10 }}>
                     <option value="1min">1min</option>
@@ -306,7 +450,7 @@ const MarketDataPanel: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                     <option value="1week">1week</option>
                     <option value="1month">1month</option>
                 </select>
-            </label>
+            </label>}
 
             <label style={{ display: 'block', marginBottom: 10 }}>
                 Aggregate to:
@@ -343,6 +487,7 @@ const MarketDataPanel: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                 <button onClick={handleSaveData} disabled={!fetchedData}>
                     Save Data
                 </button>
+                {/* Import JSON file input removed per request */}
             </div>
 
             <div style={{ marginTop: 10, minHeight: 24, color: status.startsWith('Error') ? 'red' : '#2563eb' }}>{status}</div>
