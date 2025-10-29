@@ -41,6 +41,7 @@ const ToolSidebar = ({ datasetLabel, timeframe, onResetSample, onOpenCanvasSetti
       { id: 'select' as ToolType, label: 'Select', shortcut: 'V' },
       { id: 'rectangle' as ToolType, label: 'Rectangle', shortcut: 'R' },
       { id: 'trendline' as ToolType, label: 'Trendline', shortcut: 'T' },
+      { id: 'volumeProfile' as ToolType, label: 'Volume Profile', shortcut: 'P' },
       { id: 'long' as ToolType, label: 'Long Position', shortcut: 'L' },
       { id: 'short' as ToolType, label: 'Short Position', shortcut: 'S' },
     ],
@@ -72,6 +73,15 @@ const ToolSidebar = ({ datasetLabel, timeframe, onResetSample, onOpenCanvasSetti
           >
             diagonal_line
           </span>
+        );
+      case 'volumeProfile':
+        return (
+          <svg {...common} aria-hidden>
+            <rect x="3" y="12" width="3" height="6" fill="currentColor" />
+            <rect x="8" y="9" width="3" height="9" fill="currentColor" />
+            <rect x="13" y="6" width="3" height="12" fill="currentColor" />
+            <rect x="18" y="3" width="3" height="15" fill="currentColor" />
+          </svg>
         );
       case 'long':
         return (
