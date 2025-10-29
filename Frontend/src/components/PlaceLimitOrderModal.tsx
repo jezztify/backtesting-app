@@ -48,10 +48,14 @@ const PlaceLimitOrderModal: React.FC<Props> = ({ drawing, equity, pricePrecision
 
     // `size` is in lots in this modal. Convert to units for dollar risk/reward calculations.
     // Units are affected by leverage: effective units = lots * lotSize * leverage
+    // `size` is in lots in this modal. Convert to units for calculations that expect
+    // base units (the store stores sizes in units). Units = lots * lotSize.
     const computedSizeLots = size;
-    const computedSizeUnits = computedSizeLots;
+    const computedSizeUnits = computedSizeLots * lotSize;
+
     const rrr = unitRisk > 0 && tp !== undefined ? (Math.abs(tp - entry) / unitRisk).toFixed(2) : 'n/a';
-    const dollarRisk = unitRisk > 0 ? unitRisk * computedSizeUnits * lotSize : 0;
+    // Dollar risk is price move per unit * number of units
+    const dollarRisk = unitRisk > 0 ? unitRisk * computedSizeUnits : 0;
     const dollarReward = tp !== undefined ? dollarRisk * (rrr !== 'n/a' ? Number(rrr) : 0) : 0;
 
     return (
