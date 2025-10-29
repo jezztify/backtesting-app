@@ -1,6 +1,6 @@
 
 import { ChangeEvent, useState, useEffect, useRef } from 'react';
-import { useDrawingStore, defaultRectangleStyle, defaultTrendlineStyle, defaultLongStyle, defaultShortStyle } from '../state/drawingStore';
+import { useDrawingStore, defaultRectangleStyle, defaultTrendlineStyle, defaultLongStyle, defaultShortStyle, defaultVolumeProfileStyle } from '../state/drawingStore';
 import { Drawing, RectangleDrawing, TrendlineDrawing, PositionDrawing } from '../types/drawings';
 
 interface PropertiesPanelModalProps {
@@ -42,6 +42,7 @@ const PropertiesPanelModal = ({ drawingId, onClose, onDragStart, pricePrecision,
     const updateRectangleStyle: (id: string, style: Partial<RectangleDrawing['style']> & { midline?: boolean }) => void = useDrawingStore((state) => state.updateRectangleStyle);
     const updateTrendlineStyle = useDrawingStore((state) => state.updateTrendlineStyle);
     const updatePositionStyle = useDrawingStore((state) => state.updatePositionStyle);
+    const updateVolumeProfileStyle = useDrawingStore((state) => state.updateVolumeProfileStyle);
     const midlineEnabled = useDrawingStore((state) => state.midlineEnabled);
     const setMidlineEnabled = useDrawingStore((state) => state.setMidlineEnabled);
 
@@ -600,6 +601,130 @@ const PropertiesPanelModal = ({ drawingId, onClose, onDragStart, pricePrecision,
                     >
                         Reset Style
                     </button>
+                </div>
+            </div>
+        );
+    }
+
+    if (selectedDrawing.type === 'volumeProfile') {
+        const vp = selectedDrawing as any as import('../types/drawings').VolumeProfileDrawing;
+        const handleFillChange = (event: ChangeEvent<HTMLInputElement>) => {
+            if (readOnly) return;
+            updateVolumeProfileStyle(vp.id, { fillColor: event.target.value });
+        };
+        const handleStrokeChange = (event: ChangeEvent<HTMLInputElement>) => {
+            if (readOnly) return;
+            updateVolumeProfileStyle(vp.id, { strokeColor: event.target.value });
+        };
+        const handleOpacityChange = (event: ChangeEvent<HTMLInputElement>) => {
+            if (readOnly) return;
+            const val = Number(event.target.value) / 100;
+            updateVolumeProfileStyle(vp.id, { opacity: val });
+        };
+        const handleBucketsChange = (event: ChangeEvent<HTMLInputElement>) => {
+            if (readOnly) return;
+            const val = Math.max(1, Math.min(128, Number(event.target.value)));
+            updateVolumeProfileStyle(vp.id, { buckets: val });
+        };
+        const handleRowsChange = (event: ChangeEvent<HTMLInputElement>) => {
+            if (readOnly) return;
+            const val = event.target.value.trim();
+            if (val === '') {
+                updateVolumeProfileStyle(vp.id, { rowCount: undefined } as any);
+                return;
+            }
+            const parsed = Math.floor(Number(val));
+            if (isNaN(parsed) || parsed <= 0) return;
+            updateVolumeProfileStyle(vp.id, { rowCount: parsed } as any);
+        };
+        const handleUpFillChange = (event: ChangeEvent<HTMLInputElement>) => {
+            if (readOnly) return;
+            updateVolumeProfileStyle(vp.id, { upFillColor: event.target.value } as any);
+        };
+        const handleDownFillChange = (event: ChangeEvent<HTMLInputElement>) => {
+            if (readOnly) return;
+            updateVolumeProfileStyle(vp.id, { downFillColor: event.target.value } as any);
+        };
+        const handleUpOpacityChange = (event: ChangeEvent<HTMLInputElement>) => {
+            if (readOnly) return;
+            const val = Number(event.target.value) / 100;
+            updateVolumeProfileStyle(vp.id, { upOpacity: val } as any);
+        };
+        const handleDownOpacityChange = (event: ChangeEvent<HTMLInputElement>) => {
+            if (readOnly) return;
+            const val = Number(event.target.value) / 100;
+            updateVolumeProfileStyle(vp.id, { downOpacity: val } as any);
+        };
+        const handleReset = () => {
+            if (readOnly) return;
+            if (window.confirm('Reset volume profile style to defaults?')) {
+                updateVolumeProfileStyle(vp.id, { ...defaultVolumeProfileStyle, buckets: 24 } as any);
+            }
+        };
+
+        const currentOpacity = Math.round((vp.style.opacity ?? 0.9) * 100);
+        return (
+            <div style={containerStyle}>
+                <div ref={headerRef} style={headerStyle} onMouseDown={handleHeaderMouseDown}>
+                    <span>Volume Profile Properties</span>
+                    <button
+                        style={closeButtonStyle}
+                        onClick={(e) => { e.stopPropagation(); onClose(); }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-button-hover)'; e.currentTarget.style.color = 'var(--color-text)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--color-text-muted)'; }}
+                    >
+                        ×
+                    </button>
+                </div>
+                <div style={bodyStyle}>
+                    <label style={labelStyle}>
+                        <span>Stroke Color</span>
+                        <input type="color" value={vp.style.strokeColor ?? '#1f2937'} onChange={handleStrokeChange} disabled={readOnly} style={{ ...inputStyle, padding: '4px', height: '36px', cursor: readOnly ? 'not-allowed' : 'pointer' }} />
+                    </label>
+                    <label style={labelStyle}>
+                        <span>Stroke Opacity</span>
+                        <div style={rangeContainerStyle}>
+                            <input type="range" min={0} max={100} step={5} value={Math.round((vp.style.strokeOpacity ?? 1) * 100)} onChange={(e) => { if (!readOnly) updateVolumeProfileStyle(vp.id, { strokeOpacity: Number(e.target.value) / 100 } as any); }} disabled={readOnly} style={rangeStyle} />
+                            <span style={valueDisplayStyle}>{Math.round((vp.style.strokeOpacity ?? 1) * 100)}%</span>
+                        </div>
+                    </label>
+                    <label style={labelStyle}>
+                        <span>Rows</span>
+                        <input
+                            type="number"
+                            step={1}
+                            min={1}
+                            max={2048}
+                            value={vp.rowCount ?? ''}
+                            placeholder="auto"
+                            onChange={handleRowsChange}
+                            disabled={readOnly}
+                            style={inputStyle}
+                        />
+                    </label>
+                    <label style={labelStyle}>
+                        <span>Up Volume Color</span>
+                        <input type="color" value={vp.style.upFillColor ?? defaultVolumeProfileStyle.upFillColor} onChange={handleUpFillChange} disabled={readOnly} style={{ ...inputStyle, padding: '4px', height: '36px', cursor: readOnly ? 'not-allowed' : 'pointer' }} />
+                    </label>
+                    <label style={labelStyle}>
+                        <span>Up Volume Opacity</span>
+                        <div style={rangeContainerStyle}>
+                            <input type="range" min={0} max={100} step={5} value={Math.round((vp.style.upOpacity ?? defaultVolumeProfileStyle.upOpacity) * 100)} onChange={handleUpOpacityChange} disabled={readOnly} style={rangeStyle} />
+                            <span style={valueDisplayStyle}>{Math.round((vp.style.upOpacity ?? defaultVolumeProfileStyle.upOpacity) * 100)}%</span>
+                        </div>
+                    </label>
+                    <label style={labelStyle}>
+                        <span>Down Volume Color</span>
+                        <input type="color" value={vp.style.downFillColor ?? defaultVolumeProfileStyle.downFillColor} onChange={handleDownFillChange} disabled={readOnly} style={{ ...inputStyle, padding: '4px', height: '36px', cursor: readOnly ? 'not-allowed' : 'pointer' }} />
+                    </label>
+                    <label style={labelStyle}>
+                        <span>Down Volume Opacity</span>
+                        <div style={rangeContainerStyle}>
+                            <input type="range" min={0} max={100} step={5} value={Math.round((vp.style.downOpacity ?? defaultVolumeProfileStyle.downOpacity) * 100)} onChange={handleDownOpacityChange} disabled={readOnly} style={rangeStyle} />
+                            <span style={valueDisplayStyle}>{Math.round((vp.style.downOpacity ?? defaultVolumeProfileStyle.downOpacity) * 100)}%</span>
+                        </div>
+                    </label>
+                    <button style={{ marginTop: 12, background: 'var(--color-button-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '0.5rem', fontWeight: 500, cursor: readOnly ? 'not-allowed' : 'pointer', opacity: readOnly ? 0.6 : 1 }} onClick={handleReset} disabled={readOnly}>Reset Style</button>
                 </div>
             </div>
         );

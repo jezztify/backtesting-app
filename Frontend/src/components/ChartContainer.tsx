@@ -373,6 +373,12 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
     }
   }, [isPlaying]);
 
+  // Pre-compute aggregated candles for the current playback index/timeframe so child overlay
+  // can access the same candle list for features like volume profile calculations.
+  const aggregatedCandlesMemo = useMemo(() => {
+    return aggregateTicksUpToIndex(baseTicks, baseTimeframe, timeframe, playbackIndex);
+  }, [baseTicks, baseTimeframe, timeframe, playbackIndex]);
+
   // Center the price axis on a given price
   const centerPrice = useCallback((price: number) => {
     if (!seriesRef.current) return;
@@ -821,6 +827,7 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
         converters={converters}
         pricePrecision={priceFormat.precision}
         renderTick={renderTick}
+        aggregatedCandles={aggregatedCandlesMemo}
         panHandlers={panHandlers}
       />
 

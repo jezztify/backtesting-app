@@ -235,6 +235,9 @@ const App = () => {
         case 't':
           drawingActions.setActiveTool('trendline');
           break;
+        case 'p':
+          drawingActions.setActiveTool('volumeProfile');
+          break;
         case 'delete':
         case 'backspace':
           drawingActions.deleteSelection();

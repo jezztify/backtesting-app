@@ -3,7 +3,8 @@ import PropertiesPanelModal from './PropertiesPanelModal';
 import PlaceLimitOrderModal from './PlaceLimitOrderModal';
 import { useDrawingStore } from '../state/drawingStore';
 import { useTradingStore } from '../state/tradingStore';
-import { ChartPoint, Drawing, RectangleDrawing, TrendlineDrawing, PositionDrawing } from '../types/drawings';
+import { ChartPoint, Drawing, RectangleDrawing, TrendlineDrawing, PositionDrawing, VolumeProfileDrawing } from '../types/drawings';
+import { Candle } from '../types/series';
 import { distanceToSegment, extendLineToBounds, isPointInRect, clipLineToBounds } from '../utils/geometry';
 
 interface ChartConverters {
@@ -31,6 +32,7 @@ interface DrawingOverlayProps {
   renderTick: number;
   pricePrecision: number;
   panHandlers?: PanHandlers;
+  aggregatedCandles?: Candle[];
 }
 
 type RectangleHandle = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'middle-left' | 'middle-right';
@@ -242,7 +244,26 @@ interface CanvasPosition extends CanvasDrawingBase {
   stopLoss?: { x: number; y: number };
 }
 
-type CanvasDrawing = CanvasRectangle | CanvasTrendline | CanvasPosition;
+interface CanvasVolumeProfile extends CanvasDrawingBase {
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+  rect: { x: number; y: number; width: number; height: number };
+  bins: Array<{
+    priceTop: number;
+    priceBottom: number;
+    volume: number;
+    upVolume: number;
+    downVolume: number;
+    upRatio: number;
+    downRatio: number;
+    y1: number;
+    y2: number;
+  }>;
+}
+
+type CanvasDrawing = CanvasRectangle | CanvasTrendline | CanvasPosition | CanvasVolumeProfile;
+
+const isCanvasVolumeProfile = (value: CanvasDrawing | CanvasVolumeProfile): value is CanvasVolumeProfile => (value as any).bins !== undefined && (value as any).drawing.type === 'volumeProfile';
 
 const isCanvasRectangle = (value: CanvasDrawing): value is CanvasRectangle => value.drawing.type === 'rectangle';
 const isCanvasPosition = (value: CanvasDrawing): value is CanvasPosition => value.drawing.type === 'long' || value.drawing.type === 'short';
@@ -258,7 +279,61 @@ const getPointerPosition = (event: PointerEvent<SVGSVGElement>): { x: number; y:
   };
 };
 
-const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision, panHandlers }: DrawingOverlayProps) => {
+// Snap a given price at a given time to the nearest candle's high or low (whichever is closer).
+// Returns the original price if no candles are available.
+const snapToNearestCandleHighLow = (time: number, price: number, candles?: Candle[]): number => {
+  if (!candles || candles.length === 0) return price;
+  // Find the candle with the nearest time
+  let best: Candle | null = null;
+  let bestDelta = Infinity;
+  for (const c of candles) {
+    if (!c || !Number.isFinite(c.time)) continue;
+    const delta = Math.abs(c.time - time);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      best = c;
+    }
+  }
+  if (!best) return price;
+  // Choose whichever of high/low is closer to the requested price
+  const highDist = Math.abs(best.high - price);
+  const lowDist = Math.abs(best.low - price);
+  return highDist <= lowDist ? best.high : best.low;
+};
+
+// Snap specifically to the nearest candle high (returns original price if none)
+const snapToNearestCandleHigh = (time: number, candles?: Candle[]): number | null => {
+  if (!candles || candles.length === 0) return null;
+  let best: Candle | null = null;
+  let bestDelta = Infinity;
+  for (const c of candles) {
+    if (!c || !Number.isFinite(c.time)) continue;
+    const delta = Math.abs(c.time - time);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      best = c;
+    }
+  }
+  return best ? best.high : null;
+};
+
+// Snap specifically to the nearest candle low (returns original price if none)
+const snapToNearestCandleLow = (time: number, candles?: Candle[]): number | null => {
+  if (!candles || candles.length === 0) return null;
+  let best: Candle | null = null;
+  let bestDelta = Infinity;
+  for (const c of candles) {
+    if (!c || !Number.isFinite(c.time)) continue;
+    const delta = Math.abs(c.time - time);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      best = c;
+    }
+  }
+  return best ? best.low : null;
+};
+
+const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision, panHandlers, aggregatedCandles }: DrawingOverlayProps) => {
   const overlayRef = useRef<SVGSVGElement | null>(null);
   const [interaction, setInteraction] = useState<InteractionState>({ type: 'idle' });
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; drawingId: string } | null>(null);
@@ -430,6 +505,90 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
           } satisfies CanvasPosition;
         }
 
+        // Handle volume profile (treat like a rectangle with bins)
+        if (drawing.type === 'volumeProfile') {
+          const vp = drawing as VolumeProfileDrawing;
+          const start = converters.toCanvas(vp.start);
+          const end = converters.toCanvas(vp.end);
+          if (!start || !end) return null;
+
+          const clippedX = Math.max(0, Math.min(start.x, end.x, width));
+          const clippedY = Math.max(0, Math.min(start.y, end.y, height));
+          const clippedX2 = Math.min(width, Math.max(start.x, end.x, 0));
+          const clippedY2 = Math.min(height, Math.max(start.y, end.y, 0));
+
+          const rect = {
+            x: clippedX,
+            y: clippedY,
+            width: clippedX2 - clippedX,
+            height: clippedY2 - clippedY,
+          };
+
+          if (rect.width <= 0 || rect.height <= 0) return null;
+
+          const sourceCandles = aggregatedCandles || [];
+          const minPrice = Math.min(vp.start.price, vp.end.price);
+          const maxPrice = Math.max(vp.start.price, vp.end.price);
+          const priceRange = Math.max(1e-12, maxPrice - minPrice);
+
+          // Determine number of buckets from explicit rowCount (if provided) or buckets
+          let buckets = vp.buckets ?? 24;
+          if (vp.rowCount && vp.rowCount > 0) {
+            buckets = Math.max(1, Math.min(2048, Math.floor(vp.rowCount)));
+          }
+
+          const upVolumes: number[] = new Array(buckets).fill(0);
+          const downVolumes: number[] = new Array(buckets).fill(0);
+
+          // Sum volumes into bins using candle mid-price as representative; split into up/down by candle direction
+          for (const c of sourceCandles) {
+            if (!c || !c.time) continue;
+            if (c.time < Math.min(vp.start.time, vp.end.time) || c.time > Math.max(vp.start.time, vp.end.time)) continue;
+            const midPrice = (c.high + c.low) / 2;
+            let idx = Math.floor(((midPrice - minPrice) / priceRange) * buckets);
+            if (idx < 0) idx = 0;
+            if (idx >= buckets) idx = buckets - 1;
+            const vol = Number.isFinite(c.volume) ? c.volume! : 1;
+            // Treat candles with close >= open as up-volume, else down-volume
+            if (c.close >= c.open) {
+              upVolumes[idx] += vol;
+            } else {
+              downVolumes[idx] += vol;
+            }
+          }
+
+          const totals = upVolumes.map((u, i) => u + (downVolumes[i] || 0));
+          const maxTotal = Math.max(...totals, 1e-12);
+          const binHeightPrice = priceRange / buckets;
+          const bins: CanvasVolumeProfile['bins'] = [];
+          for (let i = 0; i < buckets; i++) {
+            const priceBottom = minPrice + i * binHeightPrice;
+            const priceTop = minPrice + (i + 1) * binHeightPrice;
+            const topCanvas = converters.toCanvas({ time: vp.start.time, price: priceTop });
+            const bottomCanvas = converters.toCanvas({ time: vp.start.time, price: priceBottom });
+            if (!topCanvas || !bottomCanvas) {
+              // If conversion fails, skip this bin
+              continue;
+            }
+            const y1 = Math.min(topCanvas.y, bottomCanvas.y);
+            const y2 = Math.max(topCanvas.y, bottomCanvas.y);
+            const upVol = upVolumes[i] || 0;
+            const downVol = downVolumes[i] || 0;
+            const total = upVol + downVol;
+            const upRatio = upVol / maxTotal;
+            const downRatio = downVol / maxTotal;
+            bins.push({ priceTop, priceBottom, volume: total, upVolume: upVol, downVolume: downVol, upRatio, downRatio, y1, y2 });
+          }
+
+          return {
+            drawing: vp,
+            start,
+            end,
+            rect,
+            bins,
+          } as CanvasVolumeProfile;
+        }
+
         // Handle rectangle and trendline types (both have start and end)
         const drawingWithPoints = drawing as RectangleDrawing | TrendlineDrawing;
         const start = converters.toCanvas(drawingWithPoints.start);
@@ -480,11 +639,18 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
         } satisfies CanvasTrendline;
       })
       .filter((value): value is CanvasDrawing => value !== null);
-  }, [drawings, converters, width, height, renderTick]);
+  }, [drawings, converters, width, height, renderTick, aggregatedCandles]);
 
   const handleDraftUpdate = useCallback(
     (point: ChartPoint, shiftKey: boolean) => {
       if (draft) {
+        // If drawing a volume profile, snap the draft endpoint price to the nearest candle high/low
+        if (draft.type === 'volumeProfile') {
+          const snappedPrice = snapToNearestCandleHighLow(point.time, point.price, aggregatedCandles);
+          updateDraft({ time: point.time, price: snappedPrice });
+          return;
+        }
+
         // If shift is held and we're drawing a trendline, make it perfectly horizontal
         if (shiftKey && draft.type === 'trendline') {
           // Keep the price the same as the start point (horizontal line)
@@ -494,7 +660,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
         }
       }
     },
-    [draft, updateDraft]
+    [draft, updateDraft, aggregatedCandles]
   );
 
   const hitTestHandles = useCallback(
@@ -502,7 +668,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
       for (const item of canvasDrawings) {
         // skip handles for locked drawings (drawings with an associated order)
         if (lockedDrawingIds.has(item.drawing.id)) continue;
-        if (isCanvasRectangle(item)) {
+        if (isCanvasRectangle(item) || isCanvasVolumeProfile(item)) {
           const handlePositions = getRectangleHandlePositions(item.rect);
           for (const handle of RECTANGLE_HANDLES) {
             const point = handlePositions[handle];
@@ -570,7 +736,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
         const item = canvasDrawings[i];
         // If this drawing is locked to an order, do not allow hit-testing (prevents selection/move/resize)
         if (lockedDrawingIds.has(item.drawing.id)) continue;
-        if (isCanvasRectangle(item)) {
+        if (isCanvasRectangle(item) || isCanvasVolumeProfile(item)) {
           if (isPointInRect(canvasPoint, item.rect)) {
             return item.drawing;
           }
@@ -645,11 +811,17 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
       const svg = event.currentTarget;
       svg.setPointerCapture(event.pointerId);
 
-      if (activeTool === 'rectangle' || activeTool === 'trendline' || activeTool === 'long' || activeTool === 'short') {
+      if (activeTool === 'rectangle' || activeTool === 'trendline' || activeTool === 'long' || activeTool === 'short' || activeTool === 'volumeProfile') {
         if (!chartPoint) {
           return;
         }
-        beginDraft(activeTool, chartPoint);
+        // If starting a volume profile, snap the initial start price to the nearest candle high/low
+        if (activeTool === 'volumeProfile') {
+          const snappedStart = { time: chartPoint.time, price: snapToNearestCandleHighLow(chartPoint.time, chartPoint.price, aggregatedCandles) };
+          beginDraft(activeTool, snappedStart);
+        } else {
+          beginDraft(activeTool, chartPoint);
+        }
         setInteraction({ type: 'drawing' });
         return;
       }
@@ -692,7 +864,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
             side: handleHit.side,
           };
 
-          if ((drawing.type === 'rectangle' || drawing.type === 'long' || drawing.type === 'short') && isRectangleHandle(handleHit.handle)) {
+          if ((drawing.type === 'rectangle' || drawing.type === 'long' || drawing.type === 'short' || drawing.type === 'volumeProfile') && isRectangleHandle(handleHit.handle)) {
             const drawingWithRect = drawing as RectangleDrawing | PositionDrawing;
             nextInteraction.oppositeCorner = getRectangleOppositeCorner(handleHit.handle, drawingWithRect.start, drawingWithRect.end);
           }
@@ -754,7 +926,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
         setInteraction({ type: 'idle' });
       }
     },
-    [activeTool, beginDraft, converters, createHistoryCheckpoint, drawings, hitTestDrawings, hitTestHandles, panHandlers, selectDrawing]
+    [activeTool, beginDraft, converters, createHistoryCheckpoint, drawings, hitTestDrawings, hitTestHandles, panHandlers, selectDrawing, aggregatedCandles]
   );
   // Hide context menu on click elsewhere
   const handleCanvasClick = useCallback(() => {
@@ -911,13 +1083,62 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
       if (interaction.type === 'resizing') {
         const drawing = drawings.find(d => d.id === interaction.drawingId);
 
+        // Recompute the live opposite corner from the drawing's current points so the anchor
+        // that is not being moved remains locked to the drawing's current location.
+        let liveOppositeCorner: ChartPoint | undefined = interaction.oppositeCorner;
+        if (isRectangleHandle(interaction.handle) && drawing) {
+          try {
+            // Use the drawing's current start/end to compute the current opposite corner
+            liveOppositeCorner = getRectangleOppositeCorner(interaction.handle as RectangleHandle, drawing.start, drawing.end);
+          } catch (err) {
+            // Fallback to whatever was stored on the interaction
+            liveOppositeCorner = interaction.oppositeCorner;
+          }
+        }
+
         if (interaction.handle === 'start') {
-          updateDrawingPoints(interaction.drawingId, { start: chartPoint }, { skipHistory: true });
+          // If resizing a volume profile, snap the start time/price and then recompute
+          // the vertical bounds (min low / max high) across the resulting time span
+          if (drawing && drawing.type === 'volumeProfile') {
+            const newStart = { time: chartPoint.time, price: snapToNearestCandleHighLow(chartPoint.time, chartPoint.price, aggregatedCandles) };
+            const endPoint = drawing.end;
+            const minT = Math.min(newStart.time, endPoint.time);
+            const maxT = Math.max(newStart.time, endPoint.time);
+            const candlesInRange = (aggregatedCandles || []).filter(c => Number.isFinite(c.time) && c.time >= minT && c.time <= maxT);
+            if (candlesInRange.length > 0) {
+              const minLow = Math.min(...candlesInRange.map(c => c.low));
+              const maxHigh = Math.max(...candlesInRange.map(c => c.high));
+              updateDrawingPoints(interaction.drawingId, { start: { time: newStart.time, price: minLow }, end: { time: endPoint.time, price: maxHigh } }, { skipHistory: true });
+            } else {
+              // fallback: just update start
+              updateDrawingPoints(interaction.drawingId, { start: newStart }, { skipHistory: true });
+            }
+          } else {
+            updateDrawingPoints(interaction.drawingId, { start: chartPoint }, { skipHistory: true });
+          }
           return;
         }
 
         if (interaction.handle === 'end') {
-          updateDrawingPoints(interaction.drawingId, { end: chartPoint }, { skipHistory: true });
+          // If resizing a volume profile, snap the end time/price and then recompute
+          // the vertical bounds (min low / max high) across the resulting time span
+          if (drawing && drawing.type === 'volumeProfile') {
+            const newEnd = { time: chartPoint.time, price: snapToNearestCandleHighLow(chartPoint.time, chartPoint.price, aggregatedCandles) };
+            const startPoint = drawing.start;
+            const minT = Math.min(startPoint.time, newEnd.time);
+            const maxT = Math.max(startPoint.time, newEnd.time);
+            const candlesInRange = (aggregatedCandles || []).filter(c => Number.isFinite(c.time) && c.time >= minT && c.time <= maxT);
+            if (candlesInRange.length > 0) {
+              const minLow = Math.min(...candlesInRange.map(c => c.low));
+              const maxHigh = Math.max(...candlesInRange.map(c => c.high));
+              updateDrawingPoints(interaction.drawingId, { start: { time: startPoint.time, price: minLow }, end: { time: newEnd.time, price: maxHigh } }, { skipHistory: true });
+            } else {
+              // fallback: just update end
+              updateDrawingPoints(interaction.drawingId, { end: newEnd }, { skipHistory: true });
+            }
+          } else {
+            updateDrawingPoints(interaction.drawingId, { end: chartPoint }, { skipHistory: true });
+          }
           return;
         }
 
@@ -982,13 +1203,13 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
           return;
         }
 
-        if (isRectangleHandle(interaction.handle) && interaction.oppositeCorner && drawing && (drawing.type === 'long' || drawing.type === 'short')) {
-          const normalized = normalizeRectanglePoints(chartPoint, interaction.oppositeCorner);
+        if (isRectangleHandle(interaction.handle) && liveOppositeCorner && drawing && (drawing.type === 'long' || drawing.type === 'short')) {
+          const normalized = normalizeRectanglePoints(chartPoint, liveOppositeCorner);
           updateDrawingPoints(interaction.drawingId, normalized, { skipHistory: true });
           return;
         }
 
-        if (isRectangleHandle(interaction.handle) && interaction.oppositeCorner) {
+        if (isRectangleHandle(interaction.handle) && liveOppositeCorner) {
           // Handle middle-left and middle-right specially: horizontal resize only
           if (interaction.handle === 'middle-left' || interaction.handle === 'middle-right') {
             const originalStart = interaction.originalStart;
@@ -999,27 +1220,97 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
             if (interaction.handle === 'middle-left') {
               // Resize left side horizontally only
               const newTime = Math.min(chartPoint.time, interaction.originalEnd.time);
-              updateDrawingPoints(interaction.drawingId, {
-                start: { time: newTime, price: minPrice },
-                end: { time: interaction.originalEnd.time, price: maxPrice }
-              }, { skipHistory: true });
+              if (drawing && drawing.type === 'volumeProfile') {
+                const startTime = newTime;
+                const endTime = interaction.originalEnd.time;
+                const candlesInRange = (aggregatedCandles || []).filter(c => Number.isFinite(c.time) && c.time >= Math.min(startTime, endTime) && c.time <= Math.max(startTime, endTime));
+                if (candlesInRange.length > 0) {
+                  const minLow = Math.min(...candlesInRange.map(c => c.low));
+                  const maxHigh = Math.max(...candlesInRange.map(c => c.high));
+                  updateDrawingPoints(interaction.drawingId, {
+                    start: { time: startTime, price: minLow },
+                    end: { time: endTime, price: maxHigh }
+                  }, { skipHistory: true });
+                } else {
+                  const snappedLow = snapToNearestCandleLow(startTime, aggregatedCandles);
+                  const snappedHigh = snapToNearestCandleHigh(endTime, aggregatedCandles);
+                  updateDrawingPoints(interaction.drawingId, {
+                    start: { time: startTime, price: snappedLow ?? minPrice },
+                    end: { time: endTime, price: snappedHigh ?? maxPrice }
+                  }, { skipHistory: true });
+                }
+              } else {
+                updateDrawingPoints(interaction.drawingId, {
+                  start: { time: newTime, price: minPrice },
+                  end: { time: interaction.originalEnd.time, price: maxPrice }
+                }, { skipHistory: true });
+              }
             } else {
               // Resize right side horizontally only
               const newTime = Math.max(chartPoint.time, interaction.originalStart.time);
-              updateDrawingPoints(interaction.drawingId, {
-                start: { time: interaction.originalStart.time, price: minPrice },
-                end: { time: newTime, price: maxPrice }
-              }, { skipHistory: true });
+              if (drawing && drawing.type === 'volumeProfile') {
+                const startTime = interaction.originalStart.time;
+                const endTime = newTime;
+                const candlesInRange = (aggregatedCandles || []).filter(c => Number.isFinite(c.time) && c.time >= Math.min(startTime, endTime) && c.time <= Math.max(startTime, endTime));
+                if (candlesInRange.length > 0) {
+                  const minLow = Math.min(...candlesInRange.map(c => c.low));
+                  const maxHigh = Math.max(...candlesInRange.map(c => c.high));
+                  updateDrawingPoints(interaction.drawingId, {
+                    start: { time: startTime, price: minLow },
+                    end: { time: endTime, price: maxHigh }
+                  }, { skipHistory: true });
+                } else {
+                  const snappedLow = snapToNearestCandleLow(startTime, aggregatedCandles);
+                  const snappedHigh = snapToNearestCandleHigh(endTime, aggregatedCandles);
+                  updateDrawingPoints(interaction.drawingId, {
+                    start: { time: startTime, price: snappedLow ?? minPrice },
+                    end: { time: endTime, price: snappedHigh ?? maxPrice }
+                  }, { skipHistory: true });
+                }
+              } else {
+                updateDrawingPoints(interaction.drawingId, {
+                  start: { time: interaction.originalStart.time, price: minPrice },
+                  end: { time: newTime, price: maxPrice }
+                }, { skipHistory: true });
+              }
             }
           } else {
             // Corner handles: normal resize behavior
-            const normalized = normalizeRectanglePoints(chartPoint, interaction.oppositeCorner);
+            // If this drawing is a volumeProfile, snap the dragging corner's price to nearest candle high/low
+            const candidatePoint = drawing && drawing.type === 'volumeProfile'
+              ? { time: chartPoint.time, price: snapToNearestCandleHighLow(chartPoint.time, chartPoint.price, aggregatedCandles) }
+              : chartPoint;
+            let normalized = normalizeRectanglePoints(candidatePoint, liveOppositeCorner);
+            // If this is a volume profile, compute the true min low and max high across
+            // candles within the normalized time range and anchor the vertical bounds to them
+            // so the highest/lowest candles are included in the measurement.
+            if (drawing && drawing.type === 'volumeProfile') {
+              const minT = normalized.start.time;
+              const maxT = normalized.end.time;
+              const candlesInRange = (aggregatedCandles || []).filter(c => Number.isFinite(c.time) && c.time >= minT && c.time <= maxT);
+              if (candlesInRange.length > 0) {
+                const minLow = Math.min(...candlesInRange.map(c => c.low));
+                const maxHigh = Math.max(...candlesInRange.map(c => c.high));
+                normalized = {
+                  start: { time: normalized.start.time, price: minLow },
+                  end: { time: normalized.end.time, price: maxHigh },
+                };
+              } else {
+                // Fallback: snap to nearest candle high/low by time if no candles in range
+                const snappedLow = snapToNearestCandleLow(normalized.start.time, aggregatedCandles);
+                const snappedHigh = snapToNearestCandleHigh(normalized.end.time, aggregatedCandles);
+                normalized = {
+                  start: { time: normalized.start.time, price: snappedLow ?? normalized.start.price },
+                  end: { time: normalized.end.time, price: snappedHigh ?? normalized.end.price },
+                };
+              }
+            }
             updateDrawingPoints(interaction.drawingId, normalized, { skipHistory: true });
           }
         }
       }
     },
-    [converters, handleDraftUpdate, interaction, panHandlers, updateDrawingPoints, updatePositionStyle, modalDragging, handleModalDrag, drawings]
+    [converters, handleDraftUpdate, interaction, panHandlers, updateDrawingPoints, updatePositionStyle, modalDragging, handleModalDrag, drawings, aggregatedCandles]
   );
 
   const handlePointerUp = useCallback(
@@ -1094,6 +1385,74 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
       />
 
       {canvasDrawings.map((item) => {
+        if (isCanvasVolumeProfile(item)) {
+          const drawing = item.drawing as VolumeProfileDrawing;
+          return (
+            <g key={drawing.id} filter={selectionId === drawing.id ? 'url(#selection-shadow)' : undefined}>
+              {/* Render volume profile bins as horizontal bars anchored to the right side of the rect */}
+              {item.bins.map((bin, i) => {
+                const upWidth = Math.max(0, Math.round(bin.upRatio * item.rect.width));
+                const downWidth = Math.max(0, Math.round(bin.downRatio * item.rect.width));
+                // Render from left -> right: down segment first (at left), then up segment to its right
+                const leftX = item.rect.x;
+                const downX = leftX;
+                const upX = leftX + downWidth;
+                const barY = bin.y1;
+                const barH = Math.max(1, bin.y2 - bin.y1);
+                return (
+                  <g key={i}>
+                    {downWidth > 0 && (
+                      <rect
+                        x={downX}
+                        y={barY}
+                        width={downWidth}
+                        height={barH}
+                        fill={drawing.style.downFillColor ?? '#ef4444'}
+                        fillOpacity={drawing.style.downOpacity ?? 0.6}
+                        stroke={drawing.style.strokeColor ?? 'rgba(0,0,0,0.12)'}
+                        strokeWidth={drawing.style.lineWidth ?? 1}
+                        strokeOpacity={drawing.style.strokeOpacity ?? 1}
+                      />
+                    )}
+                    {upWidth > 0 && (
+                      <rect
+                        x={upX}
+                        y={barY}
+                        width={upWidth}
+                        height={barH}
+                        fill={drawing.style.upFillColor ?? '#10b981'}
+                        fillOpacity={drawing.style.upOpacity ?? 0.9}
+                        stroke={drawing.style.strokeColor ?? 'rgba(0,0,0,0.12)'}
+                        strokeWidth={drawing.style.lineWidth ?? 1}
+                        strokeOpacity={drawing.style.strokeOpacity ?? 1}
+                      />
+                    )}
+                  </g>
+                );
+              })}
+
+              {selectionId === drawing.id && (
+                (() => {
+                  const handlePositions = getRectangleHandlePositions(item.rect);
+                  return (
+                    <>
+                      {RECTANGLE_HANDLES.map((handleKey) => (
+                        <circle
+                          key={handleKey}
+                          cx={handlePositions[handleKey].x}
+                          cy={handlePositions[handleKey].y}
+                          r={HANDLE_RADIUS}
+                          className="handle"
+                        />
+                      ))}
+                    </>
+                  );
+                })()
+              )}
+            </g>
+          );
+        }
+
         if (isCanvasRectangle(item)) {
           const drawing = item.drawing as RectangleDrawing;
           const midlineY = item.rect.y + item.rect.height / 2;
@@ -1373,8 +1732,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
         if (!start || !end) {
           return null;
         }
-
-        if (draft.type === 'rectangle') {
+        if (draft.type === 'rectangle' || draft.type === 'volumeProfile') {
           const rect = {
             x: Math.min(start.x, end.x),
             y: Math.min(start.y, end.y),

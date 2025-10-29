@@ -1,4 +1,4 @@
-export type ToolType = 'select' | 'rectangle' | 'trendline' | 'long' | 'short';
+export type ToolType = 'select' | 'rectangle' | 'trendline' | 'long' | 'short' | 'volumeProfile';
 
 export type ChartTime = number;
 
@@ -24,6 +24,26 @@ export interface RectangleDrawing {
   midline?: boolean; // If true, draw a midline through the rectangle
   // Optional link to a trading order id created from this drawing
   linkedOrderId?: string;
+}
+
+export interface VolumeProfileDrawing {
+  id: string;
+  type: 'volumeProfile';
+  start: ChartPoint; // left/top corner (time, price)
+  end: ChartPoint; // right/bottom corner (time, price)
+  buckets?: number; // number of price bins (overridden by rowSize if provided)
+  // Number of rows (bins) to display. If set, overrides the `buckets` setting.
+  rowCount?: number;
+  style: DrawingStyle & {
+    fillColor?: string;
+    strokeColor?: string;
+    opacity?: number;
+    // Up/Down specific colors and opacities
+    upFillColor?: string;
+    downFillColor?: string;
+    upOpacity?: number;
+    downOpacity?: number;
+  };
 }
 
 export interface TrendlineDrawing {
@@ -62,7 +82,7 @@ export interface PositionDrawing {
   linkedOrderId?: string;
 }
 
-export type Drawing = RectangleDrawing | TrendlineDrawing | PositionDrawing;
+export type Drawing = RectangleDrawing | TrendlineDrawing | PositionDrawing | VolumeProfileDrawing;
 
 export interface DraftDrawing {
   type: Drawing['type'];

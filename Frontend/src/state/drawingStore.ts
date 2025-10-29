@@ -8,6 +8,7 @@ import {
   TrendlineDrawing,
   PositionDrawing,
 } from '../types/drawings';
+import { VolumeProfileDrawing } from '../types/drawings';
 import { cloneDrawingList } from '../utils/geometry';
 import { saveWorkspaceState, loadWorkspaceState } from '../services/persistence';
 
@@ -44,6 +45,19 @@ export const defaultShortStyle = {
   showRiskReward: false,
 };
 
+export const defaultVolumeProfileStyle = {
+  strokeColor: '#1f2937',
+  fillColor: '#2563eb',
+  strokeOpacity: 1,
+  opacity: 0.9,
+  lineWidth: 1,
+  // Up/Down colors for split volume rendering
+  upFillColor: '#10b981',
+  downFillColor: '#ef4444',
+  upOpacity: 0.9,
+  downOpacity: 0.9,
+};
+
 const generateId = (): string => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID();
@@ -75,6 +89,7 @@ interface DrawingState {
   lastTrendlineStyle: TrendlineDrawing['style'];
   lastLongStyle: PositionDrawing['style'];
   lastShortStyle: PositionDrawing['style'];
+  lastVolumeProfileStyle: VolumeProfileDrawing['style'];
   setMidlineEnabled: (enabled: boolean) => void;
   setDatasetId: (datasetId: string) => void;
   setActiveTool: (tool: ToolType) => void;
@@ -95,6 +110,7 @@ interface DrawingState {
     id: string,
     style: Partial<TrendlineDrawing['style']> & { extendLeft?: boolean; extendRight?: boolean }
   ) => void;
+  updateVolumeProfileStyle: (id: string, style: Partial<VolumeProfileDrawing['style']> & { buckets?: number; rowCount?: number | undefined }) => void;
   updatePositionStyle: (id: string, style: Partial<PositionDrawing['style']> & { stopLoss?: number; takeProfit?: number; entry?: number }) => void;
   deleteSelection: () => void;
   duplicateSelection: () => void;
@@ -124,6 +140,7 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
   lastTrendlineStyle: { ...defaultTrendlineStyle },
   lastLongStyle: { ...defaultLongStyle },
   lastShortStyle: { ...defaultShortStyle },
+  lastVolumeProfileStyle: { ...defaultVolumeProfileStyle },
   setMidlineEnabled: (enabled) => set({ midlineEnabled: enabled }),
   setDatasetId: (datasetId) => set({ datasetId }),
   setActiveTool: (tool) => set({ activeTool: tool, draft: null }),
@@ -179,6 +196,16 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
         extendRight: false,
         style: { ...state.lastTrendlineStyle },
       };
+    } else if (draft.type === 'volumeProfile') {
+      drawing = {
+        id: generateId(),
+        type: 'volumeProfile',
+        start: { ...draft.start },
+        end: { ...draft.end },
+        buckets: 24,
+        rowCount: undefined,
+        style: { ...state.lastVolumeProfileStyle },
+      } as VolumeProfileDrawing;
     } else if (draft.type === 'long') {
       // For long positions, use the rectangle to define levels
       // Entry is at the bottom, TP at top, SL calculated below entry
@@ -570,5 +597,46 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
     lastTrendlineStyle: { ...defaultTrendlineStyle },
     lastLongStyle: { ...defaultLongStyle },
     lastShortStyle: { ...defaultShortStyle },
+    lastVolumeProfileStyle: { ...defaultVolumeProfileStyle },
   }),
+  updateVolumeProfileStyle: (id, style) =>
+    set((state) => {
+      const index = state.drawings.findIndex((drawing) => drawing.id === id && drawing.type === 'volumeProfile');
+      if (index === -1) {
+        return state;
+      }
+      const drawings = cloneDrawingList(state.drawings) as VolumeProfileDrawing[];
+      const target = drawings[index] as VolumeProfileDrawing;
+      const { buckets, rowCount, ...styleUpdates } = style as Partial<VolumeProfileDrawing['style']> & { buckets?: number; rowCount?: number };
+      // Clamp up/down opacities if provided
+      const normalizedUpdates = { ...styleUpdates } as Partial<VolumeProfileDrawing['style']>;
+      if (Object.prototype.hasOwnProperty.call(styleUpdates, 'strokeOpacity')) {
+        const v = (styleUpdates as any).strokeOpacity;
+        normalizedUpdates.strokeOpacity = clampOpacity(v) ?? (target.style.strokeOpacity as number | undefined);
+      }
+      if (Object.prototype.hasOwnProperty.call(styleUpdates, 'upOpacity')) {
+        const v = (styleUpdates as any).upOpacity;
+        normalizedUpdates.upOpacity = clampOpacity(v) ?? (target.style.upOpacity as number | undefined);
+      }
+      if (Object.prototype.hasOwnProperty.call(styleUpdates, 'downOpacity')) {
+        const v = (styleUpdates as any).downOpacity;
+        normalizedUpdates.downOpacity = clampOpacity(v) ?? (target.style.downOpacity as number | undefined);
+      }
+      const newStyle = { ...target.style, ...normalizedUpdates };
+      target.style = newStyle;
+      if (buckets !== undefined) {
+        target.buckets = buckets;
+      }
+      // If the caller explicitly provided a rowCount property (even if undefined), honor it.
+      if (Object.prototype.hasOwnProperty.call(style, 'rowCount')) {
+        target.rowCount = rowCount as any;
+      }
+      return {
+        drawings,
+        lastVolumeProfileStyle: newStyle,
+        undoStack: [...state.undoStack, cloneDrawingList(state.drawings)],
+        redoStack: [],
+        revision: state.revision + 1,
+      };
+    }),
 }));
