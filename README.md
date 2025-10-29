@@ -10,25 +10,18 @@ If you like this project, give it a star so others will discover it too.
 
 ## Quick start
 
-1. Install dependencies
-
+1. Run runner script
 ```bash
-npm install
+./scripts/start-dev.sh
 ```
 
-2. Run the dev server
-
-```bash
-npm run dev
-```
-
-3. Build for production
+2. Build for production
 
 ```bash
 npm run build
 ```
 
-4. Run tests
+3. Run tests
 
 ```bash
 npm test
@@ -164,5 +157,3 @@ Contributions welcome — open issues or PRs. Keep changes small and focused. Ad
 See `LICENSE` for the license used by the frontend scaffolding.
 
 ---
-
-If you'd like, I can also: update a short README section that lists available sample data files, add a badge to show tests status, or open a PR that adds a dataset picker UI. Which would you prefer next?
