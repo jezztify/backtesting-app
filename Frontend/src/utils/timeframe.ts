@@ -123,22 +123,25 @@ const createLongTermFormatter = (timezone: string = 'UTC') => {
  * Expected patterns: M1, M5, M15, M30, H1, H4, Daily, Weekly, Monthly
  */
 export const detectTimeframeFromFilename = (filename: string): Timeframe => {
-  const upperFilename = filename.toUpperCase();
+  const fn = filename.toLowerCase();
 
-  // Check for minute-based timeframes
-  if (upperFilename.includes('M1_') || upperFilename.includes('_M1_')) return 'M1';
-  if (upperFilename.includes('M5_') || upperFilename.includes('_M5_')) return 'M5';
-  if (upperFilename.includes('M15_') || upperFilename.includes('_M15_')) return 'M15';
-  if (upperFilename.includes('M30_') || upperFilename.includes('_M30_')) return 'M30';
+  // Minute-based patterns: handle separators like '_' or '-' or start/end
+  const sep = /(^|[^0-9a-z])/;
+  const sepEnd = /([^0-9a-z]|$)/;
+  if (fn.match(new RegExp('(^|[^0-9a-z])1\\s*min([^0-9a-z]|$)'))) return 'M1';
+  if (fn.match(new RegExp('(^|[^0-9a-z])m1([^0-9a-z]|$)'))) return 'M1';
+  if (fn.match(new RegExp('(^|[^0-9a-z])5\\s*min([^0-9a-z]|$)')) || fn.match(new RegExp('(^|[^0-9a-z])m5([^0-9a-z]|$)'))) return 'M5';
+  if (fn.match(new RegExp('(^|[^0-9a-z])15\\s*min([^0-9a-z]|$)')) || fn.match(new RegExp('(^|[^0-9a-z])m15([^0-9a-z]|$)'))) return 'M15';
+  if (fn.match(new RegExp('(^|[^0-9a-z])30\\s*min([^0-9a-z]|$)')) || fn.match(new RegExp('(^|[^0-9a-z])m30([^0-9a-z]|$)'))) return 'M30';
 
-  // Check for hour-based timeframes
-  if (upperFilename.includes('H1_') || upperFilename.includes('_H1_')) return 'H1';
-  if (upperFilename.includes('H4_') || upperFilename.includes('_H4_')) return 'H4';
+  // Hour-based patterns: '1h', 'h1', '1 hour' — handle separators
+  if (fn.match(new RegExp('(^|[^0-9a-z])1\\s*h(?:our)?s?([^0-9a-z]|$)')) || fn.match(new RegExp('(^|[^0-9a-z])h1([^0-9a-z]|$)'))) return 'H1';
+  if (fn.match(new RegExp('(^|[^0-9a-z])4\\s*h(?:our)?s?([^0-9a-z]|$)')) || fn.match(new RegExp('(^|[^0-9a-z])h4([^0-9a-z]|$)'))) return 'H4';
 
-  // Check for day/week/month
-  if (upperFilename.includes('DAILY') || upperFilename.includes('_D_') || upperFilename.includes('_D1_')) return 'Daily';
-  if (upperFilename.includes('WEEKLY') || upperFilename.includes('_W_') || upperFilename.includes('_W1_')) return 'Weekly';
-  if (upperFilename.includes('MONTHLY') || upperFilename.includes('_MN_') || upperFilename.includes('_MN1_')) return 'Monthly';
+  // Day/week/month
+  if (fn.includes('daily') || fn.match(/\bdaily\b|\bd\b|\bd1\b/)) return 'Daily';
+  if (fn.includes('weekly') || fn.match(/\bweekly\b|\bw\b|\bw1\b/)) return 'Weekly';
+  if (fn.includes('monthly') || fn.match(/\bmonthly\b|\bmn\b|\bmn1\b/)) return 'Monthly';
 
   return 'Unknown';
 };

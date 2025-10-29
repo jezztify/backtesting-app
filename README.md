@@ -6,6 +6,8 @@ Lightweight prototype for a manual backtesting workspace with a TradingView-like
 If you like this project, give it a star so others will discover it too.
 
 [![Watch the video](https://img.youtube.com/vi/-SRq_xEaiFg/0.jpg)](https://www.youtube.com/watch?v=-SRq_xEaiFg)
+
+
 ## Quick start
 
 1. Install dependencies
@@ -47,6 +49,8 @@ The Vite dev server runs on http://localhost:5173 by default.
 - Properties panel and modal for editing drawing/chart properties (`src/components/PropertiesPanel.tsx`, `src/components/PropertiesPanelModal.tsx`)
 - Tool sidebar: quick access to tools, dataset label, timeframe display, and reset actions (`src/components/ToolSidebar.tsx`)
 - Utilities: CSV parsing, geometry helpers (clipping, line math), format helpers (`src/utils/csv.ts`, `src/utils/geometry.ts`, `src/utils/format.ts`)
+ - Timeframe & timezone helpers: timezone-aware tick mark formatters and filename-based timeframe detection (`src/utils/timeframe.ts`) for improved axis labels across minute/hour/day views
+ - Utilities: CSV parsing, geometry helpers (clipping, line math), format helpers (`src/utils/csv.ts`, `src/utils/geometry.ts`, `src/utils/format.ts`)
 - State management: lightweight global stores using `zustand` (`src/state/*`)
 - Tests: Vitest unit tests for core utilities and stores (see `Frontend/src/__tests__`)
 
@@ -82,6 +86,20 @@ Notes and tips
 - Saved API keys are stored in `localStorage` under `marketDataApiKeys` (provider keyed).
 - The panel can optionally aggregate data to a larger interval before saving; this is useful if you want M15 or H1 candles built server-side and saved as JSON.
 - If you prefer to keep fetched JSON inside the repo for development, save the downloaded file to `Frontend/src/data/` and open it via `Import Data` or by referencing it from the app (the app's sample loader can load files under `src/data/`).
+
+## Market Data providers
+
+This workspace includes first-class support for several common market-data sources and local JSON files. The app will attempt to detect the file format and timeframe automatically when importing saved JSON.
+
+- Twelve Data (recommended): built-in fetcher via the Market Data panel. Supports chunked downloads, interval selection, and saving JSON for later import. The panel stores API keys in `localStorage` and will throttle/chunk requests to avoid rate limits.
+- Dukascopy: supported by importing saved Dukascopy JSON (or using the provided `parse-dukascopy-json.js` script). Put saved files under `Frontend/src/data/` or import via the app.
+- Local JSON files: any JSON exported by the Market Data panel or converted with the repo scripts can be placed in `Frontend/src/data/` and imported directly. The DataLoader looks for common fields (`values`, `meta.interval`, or timestamp+OHLC arrays) and will try to map them into the app's candle format.
+
+Filename & timeframe tips
+
+- Filenames like `EURUSD_1min_20251001_20251010.json`, `EURUSD_M5_20251001_20251010.json`, or `EURUSD_H1_20251001_20251010.json` are recognized by the automatic timeframe detector (`src/utils/timeframe.ts`). The detector also understands variations such as `m1`, `1min`, `1h`, `daily`, `weekly`, and `monthly`.
+- If the app cannot detect a timeframe automatically, use the Market Data panel to specify the source interval when importing.
+- For long date ranges use the panel's chunking (5-day windows) to avoid provider rate limits when fetching from Twelve Data.
 
 ## UI overview
 
@@ -128,6 +146,7 @@ Detailed design notes and feature docs live in `Frontend/docs/`:
 ## Testing & quality
 
 - Unit tests: `npm test` runs Vitest. Core utilities and stores are covered (timeframe aggregation, tick playback, geometry clipping, CSV conversion, trading store behaviors).
+ - Unit tests: `npm test` runs Vitest. Core utilities and stores are covered (timeframe aggregation, tick playback, geometry clipping, CSV conversion, trading store behaviors). Recent test additions include timeframe parsing and tick playback edge-case coverage.
 - Linting & formatting: ESLint + Prettier configured in the repo (see `package.json` devDependencies).
 
 ## Notes, limitations & next steps

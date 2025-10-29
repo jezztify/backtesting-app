@@ -39,11 +39,55 @@ const DataLoader = ({ onDatasetLoaded }: DataLoaderProps) => {
           setErrors(['Invalid JSON file']);
           return;
         }
-        // Check for Twelve Data format
+
+        // Helper: normalize arrays of dukascopy-style objects into Candle[]
+        const parseDukascopyArray = (vals: any[]): Candle[] => {
+          if (!Array.isArray(vals)) return [];
+          const result: Candle[] = [];
+          for (const v of vals) {
+            if (!v) continue;
+            // find timestamp-like field
+            let ts: number | null = null;
+            const cand = v.timestamp ?? v.time ?? v.t ?? v.datetime ?? v.date ?? null;
+            if (typeof cand === 'number') ts = cand;
+            else if (typeof cand === 'string' && /^\d+$/.test(cand)) ts = Number(cand);
+            else if (typeof cand === 'string') {
+              const parsed = Date.parse(cand.replace(' ', 'T'));
+              if (!Number.isNaN(parsed)) ts = parsed;
+            }
+
+            if (ts != null) {
+              // Normalize numeric timestamps to seconds.
+              // Dukascopy files may contain seconds, milliseconds or microseconds.
+              // Reduce by factors of 1000 until the value looks like seconds (around 1e9-1e10).
+              while (ts > 1e11) {
+                ts = Math.floor(ts / 1000);
+              }
+            }
+
+            const open = v.open ?? v.o ?? v.O ?? null;
+            const high = v.high ?? v.h ?? v.H ?? null;
+            const low = v.low ?? v.l ?? v.L ?? null;
+            const close = v.close ?? v.c ?? v.C ?? null;
+            const volume = v.volume ?? v.v ?? v.V ?? undefined;
+
+            if (ts == null || open == null || high == null || low == null || close == null) continue;
+
+            const timeSec = Math.floor(Number(ts));
+            const o = parseFloat(String(open));
+            const h = parseFloat(String(high));
+            const l = parseFloat(String(low));
+            const c = parseFloat(String(close));
+            const vol = volume !== undefined && volume !== null ? parseFloat(String(volume)) : undefined;
+            if ([o, h, l, c].some((n) => Number.isNaN(n))) continue;
+            result.push({ time: timeSec, open: o, high: h, low: l, close: c, volume: Number.isNaN(vol as number) ? undefined : vol });
+          }
+          return result;
+        };
+
+        // Handle Twelve Data format (json.values)
         if (json && Array.isArray(json.values)) {
-          // Convert to Candle[]
           const candles = json.values.map((v: any) => {
-            // Try to parse datetime as Unix timestamp (seconds)
             const dt = v.datetime ? Math.floor(new Date(v.datetime.replace(' ', 'T')).getTime() / 1000) : undefined;
             return {
               time: dt,
@@ -55,10 +99,8 @@ const DataLoader = ({ onDatasetLoaded }: DataLoaderProps) => {
             };
           }).filter((c: any) => c.time && !isNaN(c.open) && !isNaN(c.high) && !isNaN(c.low) && !isNaN(c.close));
           if (candles.length > 0) {
-            // Try to infer timeframe from meta or filename
             let timeframe = detectTimeframeFromFilename(file.name);
             if ((!timeframe || timeframe === 'Unknown') && json.meta && typeof json.meta.interval === 'string') {
-              // Map Twelve Data interval to Timeframe
               const map: Record<string, Timeframe> = {
                 '1min': 'M1', '5min': 'M5', '15min': 'M15', '30min': 'M30',
                 '1h': 'H1', '4h': 'H4', '1day': 'Daily', '1week': 'Weekly', '1month': 'Monthly',
@@ -66,20 +108,30 @@ const DataLoader = ({ onDatasetLoaded }: DataLoaderProps) => {
               timeframe = map[json.meta.interval] || 'Unknown';
             }
             onDatasetLoaded(file.name.replace(/\.(csv|json)$/i, ''), candles, timeframe);
-          } else {
-            setErrors(['No valid candles found in JSON file']);
+            return;
           }
-        } else {
-          setErrors(['JSON file not recognized as Twelve Data format']);
         }
+
+        // Handle Dukascopy native JSON (array or wrapped in .values/.data)
+        const vals = Array.isArray(json) ? json : Array.isArray(json.values) ? json.values : Array.isArray(json.data) ? json.data : [];
+        const dukCands = parseDukascopyArray(vals);
+        if (dukCands.length > 0) {
+          const timeframe = detectTimeframeFromFilename(file.name) || 'Unknown';
+          onDatasetLoaded(file.name.replace(/\.(csv|json)$/i, ''), dukCands, timeframe);
+          return;
+        }
+
+        setErrors(['JSON file not recognized as Twelve Data or Dukascopy format']);
       } else {
-        setErrors(['Unsupported file type. Please upload a CSV or Twelve Data JSON file.']);
+        setErrors(['Unsupported file type. Please upload a CSV or Twelve Data/Dukascopy JSON file.']);
       }
     } catch (error) {
       setErrors([error instanceof Error ? error.message : 'Failed to parse file']);
     } finally {
       setIsLoading(false);
-      event.target.value = '';
+      try {
+        (event.target as HTMLInputElement).value = '';
+      } catch { }
     }
   };
 
