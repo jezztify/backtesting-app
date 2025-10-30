@@ -36,7 +36,7 @@ The Vite dev server runs on http://localhost:5173 by default.
 - Tick playback system: play/pause, step forward/backward, adjustable tick rate, and live tick advancement (see `src/utils/tickPlayback.ts` and `Frontend/docs/tick-playback-system.md`)
 - Drawing tools: Rectangle, Trendline, and Long/Short Position tools with selection, move, duplicate, delete, undo/redo, and property editing (implemented in `src/components/DrawingOverlay.tsx` and `src/components/ToolSidebar.tsx`)
 - Trading panel / simulated positions: place and edit manual positions, position markers rendered on the chart (`src/components/TradingPanel.tsx` and `src/state/tradingStore.ts`)
-- Market Data & Data Loader: sample datasets included (see `src/data/`) and a Market Data panel for loading/inspecting data (`src/components/MarketDataPanel.tsx`, `src/components/DataLoader.tsx`)
+- Import Market Data & Data Loader: sample datasets included (see `src/data/`) and a Import Market Data panel for loading/inspecting data (`src/components/MarketDataPanel.tsx`, `src/components/DataLoader.tsx`)
 - Persistence: drawings and playback/chart state persist to `localStorage` via `src/services/persistence.ts`
 - Theme toggle (light/dark) via `src/components/ThemeToggle.tsx`
 - Properties panel and modal for editing drawing/chart properties (`src/components/PropertiesPanel.tsx`, `src/components/PropertiesPanelModal.tsx`)
@@ -47,13 +47,13 @@ The Vite dev server runs on http://localhost:5173 by default.
 - State management: lightweight global stores using `zustand` (`src/state/*`)
 - Tests: Vitest unit tests for core utilities and stores (see `Frontend/src/__tests__`)
 
-## Using the Market Data panel (Twelve Data)
+## Using the Import Market Data panel (Twelve Data)
 
-The app includes a built-in Market Data panel (header button "Market Data") that can fetch time-series from Twelve Data directly and save the returned JSON for import. This is the recommended workflow (no curl or external downloads required):
+The app includes a built-in Import Market Data panel (header button "Import Market Data") that can fetch time-series from Twelve Data directly and save the returned JSON for import. This is the recommended workflow (no curl or external downloads required):
 
-1) Open Market Data
+1) Open Import Market Data
 
-- In the app header click the "Market Data" button to open the Market Data panel.
+- In the app header click the "Import Market Data" button to open the Import Market Data panel.
 
 2) Save your Twelve Data API key
 
@@ -71,27 +71,27 @@ The app includes a built-in Market Data panel (header button "Market Data") that
 
 5) Import into the workspace
 
-- Use the `Import Data` control in the header (the same button used for file uploads) to import the saved JSON. `DataLoader` recognises Twelve Data JSON (it looks for `values` and `meta.interval`) and will convert the records into the app's candle format and set an appropriate timeframe.
+- Use the `Load Market Data` control in the header (the same button used for file uploads) to import the saved JSON. `DataLoader` recognises Twelve Data JSON (it looks for `values` and `meta.interval`) and will convert the records into the app's candle format and set an appropriate timeframe.
 
 Notes and tips
 
-- The Market Data panel handles rate limits by default (it will chunk requests in 5-day windows and throttle requests to avoid hitting Twelve Data limits).
+- The Import Market Data panel handles rate limits by default (it will chunk requests in 5-day windows and throttle requests to avoid hitting Twelve Data limits).
 - Saved API keys are stored in `localStorage` under `marketDataApiKeys` (provider keyed).
 - The panel can optionally aggregate data to a larger interval before saving; this is useful if you want M15 or H1 candles built server-side and saved as JSON.
-- If you prefer to keep fetched JSON inside the repo for development, save the downloaded file to `Frontend/src/data/` and open it via `Import Data` or by referencing it from the app (the app's sample loader can load files under `src/data/`).
+- If you prefer to keep fetched JSON inside the repo for development, save the downloaded file to `Frontend/src/data/` and open it via `Load Market Data` or by referencing it from the app (the app's sample loader can load files under `src/data/`).
 
-## Market Data providers
+## Import Market Data providers
 
 This workspace includes first-class support for several common market-data sources and local JSON files. The app will attempt to detect the file format and timeframe automatically when importing saved JSON.
 
-- Twelve Data (recommended): built-in fetcher via the Market Data panel. Supports chunked downloads, interval selection, and saving JSON for later import. The panel stores API keys in `localStorage` and will throttle/chunk requests to avoid rate limits.
+- Twelve Data (recommended): built-in fetcher via the Import Market Data panel. Supports chunked downloads, interval selection, and saving JSON for later import. The panel stores API keys in `localStorage` and will throttle/chunk requests to avoid rate limits.
 - Dukascopy: supported by importing saved Dukascopy JSON (or using the provided `parse-dukascopy-json.js` script). Put saved files under `Frontend/src/data/` or import via the app.
-- Local JSON files: any JSON exported by the Market Data panel or converted with the repo scripts can be placed in `Frontend/src/data/` and imported directly. The DataLoader looks for common fields (`values`, `meta.interval`, or timestamp+OHLC arrays) and will try to map them into the app's candle format.
+- Local JSON files: any JSON exported by the Import Market Data panel or converted with the repo scripts can be placed in `Frontend/src/data/` and imported directly. The DataLoader looks for common fields (`values`, `meta.interval`, or timestamp+OHLC arrays) and will try to map them into the app's candle format.
 
 Filename & timeframe tips
 
 - Filenames like `EURUSD_1min_20251001_20251010.json`, `EURUSD_M5_20251001_20251010.json`, or `EURUSD_H1_20251001_20251010.json` are recognized by the automatic timeframe detector (`src/utils/timeframe.ts`). The detector also understands variations such as `m1`, `1min`, `1h`, `daily`, `weekly`, and `monthly`.
-- If the app cannot detect a timeframe automatically, use the Market Data panel to specify the source interval when importing.
+- If the app cannot detect a timeframe automatically, use the Import Market Data panel to specify the source interval when importing.
 - For long date ranges use the panel's chunking (5-day windows) to avoid provider rate limits when fetching from Twelve Data.
 
 ## UI overview

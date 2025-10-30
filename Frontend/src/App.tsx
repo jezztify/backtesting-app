@@ -575,7 +575,7 @@ const App = () => {
             style={{ marginLeft: 16, padding: '6px 18px', borderRadius: 8, border: 'none', background: '#2563eb', color: '#fff', fontWeight: 500, cursor: 'pointer' }}
             onClick={() => setActiveView('marketData')}
           >
-            Market Data
+            Fetch<br />Market Data
           </button>
         </div>
       </header>

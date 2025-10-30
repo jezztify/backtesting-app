@@ -404,7 +404,7 @@ const MarketDataPanel: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
     return (
         <div style={{ padding: 20, maxWidth: 480, background: '#f9fafb', borderRadius: 10, boxShadow: '0 2px 8px #0001' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <h2 style={{ margin: 0 }}>Market Data</h2>
+                <h2 style={{ margin: 0 }}>Import Market Data</h2>
                 {onBack && (
                     <button
                         onClick={onBack}

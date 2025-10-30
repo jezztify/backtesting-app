@@ -139,7 +139,7 @@ const DataLoader = ({ onDatasetLoaded }: DataLoaderProps) => {
     <div className="data-loader">
       <label className="file-upload">
         <input type="file" accept=".csv,application/json,text/csv,application/json" onChange={handleFileChange} disabled={isLoading} />
-        <span>{isLoading ? 'Loading…' : 'Import Data'}</span>
+        <span>{isLoading ? 'Loading…' : 'Load Market Data'}</span>
       </label>
       {errors.length > 0 && (
         <ul className="error-list">
