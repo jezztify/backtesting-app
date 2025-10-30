@@ -8,7 +8,7 @@ import {
   TrendlineDrawing,
   PositionDrawing,
 } from '../types/drawings';
-import { VolumeProfileDrawing } from '../types/drawings';
+import { VolumeProfileDrawing, FibonacciDrawing } from '../types/drawings';
 import { cloneDrawingList } from '../utils/geometry';
 import { saveWorkspaceState, loadWorkspaceState } from '../services/persistence';
 
@@ -58,6 +58,13 @@ export const defaultVolumeProfileStyle = {
   downOpacity: 0.9,
 };
 
+export const defaultFibonacciStyle = {
+  strokeColor: '#f59e0b',
+  lineWidth: 1.6,
+  opacity: 1,
+  labelColor: '#f59e0b',
+};
+
 const generateId = (): string => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID();
@@ -90,6 +97,7 @@ interface DrawingState {
   lastLongStyle: PositionDrawing['style'];
   lastShortStyle: PositionDrawing['style'];
   lastVolumeProfileStyle: VolumeProfileDrawing['style'];
+  lastFibonacciStyle: FibonacciDrawing['style'];
   setMidlineEnabled: (enabled: boolean) => void;
   setDatasetId: (datasetId: string) => void;
   setActiveTool: (tool: ToolType) => void;
@@ -111,6 +119,8 @@ interface DrawingState {
     style: Partial<TrendlineDrawing['style']> & { extendLeft?: boolean; extendRight?: boolean }
   ) => void;
   updateVolumeProfileStyle: (id: string, style: Partial<VolumeProfileDrawing['style']> & { buckets?: number; rowCount?: number | undefined }) => void;
+  updateFibonacciStyle: (id: string, style: Partial<FibonacciDrawing['style']>) => void;
+  updateFibonacciLevels: (id: string, levels: number[] | undefined) => void;
   updatePositionStyle: (id: string, style: Partial<PositionDrawing['style']> & { stopLoss?: number; takeProfit?: number; entry?: number }) => void;
   deleteSelection: () => void;
   duplicateSelection: () => void;
@@ -141,6 +151,7 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
   lastLongStyle: { ...defaultLongStyle },
   lastShortStyle: { ...defaultShortStyle },
   lastVolumeProfileStyle: { ...defaultVolumeProfileStyle },
+  lastFibonacciStyle: { ...defaultFibonacciStyle },
   setMidlineEnabled: (enabled) => set({ midlineEnabled: enabled }),
   setDatasetId: (datasetId) => set({ datasetId }),
   setActiveTool: (tool) => set({ activeTool: tool, draft: null }),
@@ -206,6 +217,15 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
         rowCount: undefined,
         style: { ...state.lastVolumeProfileStyle },
       } as VolumeProfileDrawing;
+    } else if (draft.type === 'fibonacci') {
+      drawing = {
+        id: generateId(),
+        type: 'fibonacci',
+        start: { ...draft.start },
+        end: { ...draft.end },
+        levels: undefined,
+        style: { ...state.lastFibonacciStyle },
+      } as FibonacciDrawing;
     } else if (draft.type === 'long') {
       // For long positions, use the rectangle to define levels
       // Entry is at the bottom, TP at top, SL calculated below entry
@@ -276,6 +296,7 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
         style: { ...state.lastShortStyle },
       };
     }
+
 
     set((state) => ({
       drawings: [...state.drawings, drawing],
@@ -598,6 +619,7 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
     lastLongStyle: { ...defaultLongStyle },
     lastShortStyle: { ...defaultShortStyle },
     lastVolumeProfileStyle: { ...defaultVolumeProfileStyle },
+    lastFibonacciStyle: { ...defaultFibonacciStyle },
   }),
   updateVolumeProfileStyle: (id, style) =>
     set((state) => {
@@ -634,6 +656,45 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
       return {
         drawings,
         lastVolumeProfileStyle: newStyle,
+        undoStack: [...state.undoStack, cloneDrawingList(state.drawings)],
+        redoStack: [],
+        revision: state.revision + 1,
+      };
+    }),
+  updateFibonacciStyle: (id, style) =>
+    set((state) => {
+      const index = state.drawings.findIndex((drawing) => drawing.id === id && drawing.type === 'fibonacci');
+      if (index === -1) return state;
+      const drawings = cloneDrawingList(state.drawings) as FibonacciDrawing[];
+      const target = drawings[index] as FibonacciDrawing;
+      const newStyle = { ...target.style, ...(style as any) };
+      target.style = newStyle;
+      return {
+        drawings,
+        lastFibonacciStyle: newStyle,
+        undoStack: [...state.undoStack, cloneDrawingList(state.drawings)],
+        redoStack: [],
+        revision: state.revision + 1,
+      };
+    }),
+  updateFibonacciLevels: (id, levels) =>
+    set((state) => {
+      const index = state.drawings.findIndex((drawing) => drawing.id === id && drawing.type === 'fibonacci');
+      if (index === -1) return state;
+      const drawings = cloneDrawingList(state.drawings) as FibonacciDrawing[];
+      const target = drawings[index] as FibonacciDrawing;
+      // Normalize levels: ensure they are numbers between 0 and 1, sorted
+      let normalized: number[] | undefined = undefined;
+      if (Array.isArray(levels)) {
+        normalized = levels
+          .map((v) => Number(v))
+          .filter((v) => Number.isFinite(v))
+          .map((v) => Math.min(Math.max(v, 0), 1));
+        normalized = Array.from(new Set(normalized)).sort((a, b) => a - b);
+      }
+      target.levels = normalized;
+      return {
+        drawings,
         undoStack: [...state.undoStack, cloneDrawingList(state.drawings)],
         redoStack: [],
         revision: state.revision + 1,

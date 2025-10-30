@@ -1,4 +1,4 @@
-export type ToolType = 'select' | 'rectangle' | 'trendline' | 'long' | 'short' | 'volumeProfile';
+export type ToolType = 'select' | 'rectangle' | 'trendline' | 'long' | 'short' | 'volumeProfile' | 'fibonacci';
 
 export type ChartTime = number;
 
@@ -46,6 +46,16 @@ export interface VolumeProfileDrawing {
   };
 }
 
+export interface FibonacciDrawing {
+  id: string;
+  type: 'fibonacci';
+  start: ChartPoint; // typically the anchor at one extreme
+  end: ChartPoint; // the other extreme
+  // Optional custom level ratios (0..1). If omitted, default ratios will be used.
+  levels?: number[];
+  style: DrawingStyle & { strokeColor?: string; lineWidth?: number; labelColor?: string; opacity?: number };
+}
+
 export interface TrendlineDrawing {
   id: string;
   type: 'trendline';
@@ -82,7 +92,7 @@ export interface PositionDrawing {
   linkedOrderId?: string;
 }
 
-export type Drawing = RectangleDrawing | TrendlineDrawing | PositionDrawing | VolumeProfileDrawing;
+export type Drawing = RectangleDrawing | TrendlineDrawing | PositionDrawing | VolumeProfileDrawing | FibonacciDrawing;
 
 export interface DraftDrawing {
   type: Drawing['type'];

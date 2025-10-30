@@ -41,6 +41,7 @@ const ToolSidebar = ({ datasetLabel, timeframe, onResetSample, onOpenCanvasSetti
       { id: 'select' as ToolType, label: 'Select', shortcut: 'V' },
       { id: 'rectangle' as ToolType, label: 'Rectangle', shortcut: 'R' },
       { id: 'trendline' as ToolType, label: 'Trendline', shortcut: 'T' },
+      { id: 'fibonacci' as ToolType, label: 'Fibonacci', shortcut: 'F' },
       { id: 'volumeProfile' as ToolType, label: 'Volume Profile', shortcut: 'P' },
       { id: 'long' as ToolType, label: 'Long Position', shortcut: 'L' },
       { id: 'short' as ToolType, label: 'Short Position', shortcut: 'S' },
@@ -81,6 +82,13 @@ const ToolSidebar = ({ datasetLabel, timeframe, onResetSample, onOpenCanvasSetti
             <rect x="8" y="9" width="3" height="9" fill="currentColor" />
             <rect x="13" y="6" width="3" height="12" fill="currentColor" />
             <rect x="18" y="3" width="3" height="15" fill="currentColor" />
+          </svg>
+        );
+      case 'fibonacci':
+        return (
+          <svg {...common} aria-hidden>
+            <line x1="3" y1="20" x2="21" y2="4" stroke="currentColor" strokeWidth="1.6" />
+            <line x1="3" y1="16" x2="21" y2="0" stroke="currentColor" strokeWidth="1" opacity="0.6" />
           </svg>
         );
       case 'long':
