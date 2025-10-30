@@ -1,6 +1,6 @@
 
 import { ChangeEvent, useState, useEffect, useRef } from 'react';
-import { useDrawingStore, defaultRectangleStyle, defaultTrendlineStyle, defaultLongStyle, defaultShortStyle, defaultVolumeProfileStyle } from '../state/drawingStore';
+import { useDrawingStore, defaultRectangleStyle, defaultTrendlineStyle, defaultLongStyle, defaultShortStyle, defaultVolumeProfileStyle, defaultFibonacciStyle } from '../state/drawingStore';
 import { Drawing, RectangleDrawing, TrendlineDrawing, PositionDrawing } from '../types/drawings';
 
 interface PropertiesPanelModalProps {
@@ -43,6 +43,8 @@ const PropertiesPanelModal = ({ drawingId, onClose, onDragStart, pricePrecision,
     const updateTrendlineStyle = useDrawingStore((state) => state.updateTrendlineStyle);
     const updatePositionStyle = useDrawingStore((state) => state.updatePositionStyle);
     const updateVolumeProfileStyle = useDrawingStore((state) => state.updateVolumeProfileStyle);
+    const updateFibonacciStyle = useDrawingStore((state) => state.updateFibonacciStyle);
+    const updateFibonacciLevels = useDrawingStore((state) => state.updateFibonacciLevels);
     const midlineEnabled = useDrawingStore((state) => state.midlineEnabled);
     const setMidlineEnabled = useDrawingStore((state) => state.setMidlineEnabled);
 
@@ -725,6 +727,135 @@ const PropertiesPanelModal = ({ drawingId, onClose, onDragStart, pricePrecision,
                         </div>
                     </label>
                     <button style={{ marginTop: 12, background: 'var(--color-button-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '0.5rem', fontWeight: 500, cursor: readOnly ? 'not-allowed' : 'pointer', opacity: readOnly ? 0.6 : 1 }} onClick={handleReset} disabled={readOnly}>Reset Style</button>
+                </div>
+            </div>
+        );
+    }
+
+    if (selectedDrawing.type === 'fibonacci') {
+        const fib = selectedDrawing as any as import('../types/drawings').FibonacciDrawing;
+
+        const currentStroke = fib.style.strokeColor ?? defaultFibonacciStyle.strokeColor;
+        const currentLabel = fib.style.labelColor ?? fib.style.strokeColor ?? defaultFibonacciStyle.labelColor;
+        const currentLineWidth = fib.style.lineWidth ?? defaultFibonacciStyle.lineWidth;
+        const currentOpacity = Math.round((fib.style.opacity ?? defaultFibonacciStyle.opacity) * 100);
+
+        const [strokeColor, setStrokeColor] = useState(currentStroke);
+        const [labelColor, setLabelColor] = useState(currentLabel);
+        const [lineWidth, setLineWidth] = useState<number>(currentLineWidth);
+        const [opacityValue, setOpacityValue] = useState<number>(currentOpacity);
+        const [levelsText, setLevelsText] = useState('');
+
+        useEffect(() => {
+            const levels = fib.levels && fib.levels.length > 0 ? fib.levels : [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+            setLevelsText(levels.map(l => (l * 100).toFixed(l === 0 || l === 1 ? 0 : 1) + '%').join(', '));
+            setStrokeColor(currentStroke);
+            setLabelColor(currentLabel);
+            setLineWidth(currentLineWidth);
+            setOpacityValue(currentOpacity);
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [selectedDrawing && (selectedDrawing as any).id]);
+
+        const handleStrokeChange = (event: ChangeEvent<HTMLInputElement>) => {
+            if (readOnly) return;
+            setStrokeColor(event.target.value);
+            updateFibonacciStyle(fib.id, { strokeColor: event.target.value });
+        };
+
+        const handleLabelChange = (event: ChangeEvent<HTMLInputElement>) => {
+            if (readOnly) return;
+            setLabelColor(event.target.value);
+            updateFibonacciStyle(fib.id, { labelColor: event.target.value });
+        };
+
+        const handleLineWidthChange = (event: ChangeEvent<HTMLInputElement>) => {
+            if (readOnly) return;
+            const v = Number(event.target.value);
+            setLineWidth(v);
+            updateFibonacciStyle(fib.id, { lineWidth: v });
+        };
+
+        const handleOpacityChangeFib = (event: ChangeEvent<HTMLInputElement>) => {
+            if (readOnly) return;
+            const v = Number(event.target.value);
+            setOpacityValue(v);
+            updateFibonacciStyle(fib.id, { opacity: v / 100 });
+        };
+
+        const handleApplyLevels = () => {
+            if (readOnly) return;
+            const parts = levelsText.split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
+            const parsed = parts.map((p) => {
+                if (p.endsWith('%')) {
+                    const num = parseFloat(p.slice(0, -1));
+                    return isNaN(num) ? NaN : num / 100;
+                }
+                const num = parseFloat(p);
+                if (!isNaN(num)) {
+                    return num > 1 ? Math.min(Math.max(num / 100, 0), 1) : Math.min(Math.max(num, 0), 1);
+                }
+                return NaN;
+            }).filter(Number.isFinite).map(n => Math.min(Math.max(n, 0), 1));
+            updateFibonacciLevels(fib.id, parsed.length > 0 ? parsed : undefined);
+            const display = (parsed.length > 0 ? parsed : [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]).map(l => (l * 100).toFixed(l === 0 || l === 1 ? 0 : 1) + '%').join(', ');
+            setLevelsText(display);
+        };
+
+        const handleResetFib = () => {
+            if (readOnly) return;
+            const defaults = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+            updateFibonacciLevels(fib.id, defaults);
+            updateFibonacciStyle(fib.id, { strokeColor: defaultFibonacciStyle.strokeColor, lineWidth: defaultFibonacciStyle.lineWidth, opacity: defaultFibonacciStyle.opacity, labelColor: defaultFibonacciStyle.labelColor });
+            setStrokeColor(defaultFibonacciStyle.strokeColor);
+            setLabelColor(defaultFibonacciStyle.labelColor);
+            setLineWidth(defaultFibonacciStyle.lineWidth);
+            setOpacityValue(Math.round((defaultFibonacciStyle.opacity ?? 1) * 100));
+            setLevelsText(defaults.map(l => (l * 100).toFixed(l === 0 || l === 1 ? 0 : 1) + '%').join(', '));
+        };
+
+        return (
+            <div style={containerStyle}>
+                <div ref={headerRef} style={headerStyle} onMouseDown={handleHeaderMouseDown}>
+                    <span>Fibonacci Properties</span>
+                    <button
+                        style={closeButtonStyle}
+                        onClick={(e) => { e.stopPropagation(); onClose(); }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-button-hover)'; e.currentTarget.style.color = 'var(--color-text)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--color-text-muted)'; }}
+                    >
+                        ×
+                    </button>
+                </div>
+                <div style={bodyStyle}>
+                    <label style={labelStyle}>
+                        <span>Stroke Color</span>
+                        <input type="color" value={strokeColor} onChange={handleStrokeChange} disabled={readOnly} style={{ ...inputStyle, padding: '4px', height: '36px', cursor: readOnly ? 'not-allowed' : 'pointer' }} />
+                    </label>
+                    <label style={labelStyle}>
+                        <span>Label Color</span>
+                        <input type="color" value={labelColor} onChange={handleLabelChange} disabled={readOnly} style={{ ...inputStyle, padding: '4px', height: '36px', cursor: readOnly ? 'not-allowed' : 'pointer' }} />
+                    </label>
+                    <label style={labelStyle}>
+                        <span>Line Width</span>
+                        <div style={rangeContainerStyle}>
+                            <input type="range" min={1} max={8} step={0.1} value={lineWidth} onChange={handleLineWidthChange} disabled={readOnly} style={rangeStyle} />
+                        </div>
+                    </label>
+                    <label style={labelStyle}>
+                        <span>Opacity</span>
+                        <div style={rangeContainerStyle}>
+                            <input type="range" min={5} max={100} step={5} value={opacityValue} onChange={handleOpacityChangeFib} disabled={readOnly} style={rangeStyle} />
+                            <span style={valueDisplayStyle}>{opacityValue}%</span>
+                        </div>
+                    </label>
+                    <label style={labelStyle}>
+                        <span>Levels (comma separated, percent or decimal)</span>
+                        <input type="text" value={levelsText} onChange={(e) => setLevelsText(e.target.value)} disabled={readOnly} style={inputStyle} />
+                    </label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                        <button style={buttonStyle} onClick={handleApplyLevels} disabled={readOnly}>Apply Levels</button>
+                        <button style={{ ...buttonStyle, background: 'transparent', color: 'var(--color-text)', border: '1px solid var(--color-border)' }} onClick={handleResetFib} disabled={readOnly}>Reset</button>
+                    </div>
                 </div>
             </div>
         );

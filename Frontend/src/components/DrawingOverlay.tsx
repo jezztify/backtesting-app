@@ -3,7 +3,7 @@ import PropertiesPanelModal from './PropertiesPanelModal';
 import PlaceLimitOrderModal from './PlaceLimitOrderModal';
 import { useDrawingStore } from '../state/drawingStore';
 import { useTradingStore } from '../state/tradingStore';
-import { ChartPoint, Drawing, RectangleDrawing, TrendlineDrawing, PositionDrawing, VolumeProfileDrawing } from '../types/drawings';
+import { ChartPoint, Drawing, RectangleDrawing, TrendlineDrawing, PositionDrawing, VolumeProfileDrawing, FibonacciDrawing } from '../types/drawings';
 import { Candle } from '../types/series';
 import { distanceToSegment, extendLineToBounds, isPointInRect, clipLineToBounds } from '../utils/geometry';
 
@@ -261,9 +261,18 @@ interface CanvasVolumeProfile extends CanvasDrawingBase {
   }>;
 }
 
-type CanvasDrawing = CanvasRectangle | CanvasTrendline | CanvasPosition | CanvasVolumeProfile;
+interface CanvasFibonacci extends CanvasDrawingBase {
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+  rect: { x: number; y: number; width: number; height: number };
+  levels: Array<{ ratio: number; price: number; y: number }>;
+}
+
+type CanvasDrawing = CanvasRectangle | CanvasTrendline | CanvasPosition | CanvasVolumeProfile | CanvasFibonacci;
 
 const isCanvasVolumeProfile = (value: CanvasDrawing | CanvasVolumeProfile): value is CanvasVolumeProfile => (value as any).bins !== undefined && (value as any).drawing.type === 'volumeProfile';
+
+const isCanvasFibonacci = (value: CanvasDrawing | CanvasFibonacci): value is CanvasFibonacci => (value as any).levels !== undefined && (value as any).drawing.type === 'fibonacci';
 
 const isCanvasRectangle = (value: CanvasDrawing): value is CanvasRectangle => value.drawing.type === 'rectangle';
 const isCanvasPosition = (value: CanvasDrawing): value is CanvasPosition => value.drawing.type === 'long' || value.drawing.type === 'short';
@@ -589,6 +598,46 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
           } as CanvasVolumeProfile;
         }
 
+        // Handle fibonacci drawings (compute horizontal level lines)
+        if (drawing.type === 'fibonacci') {
+          const fib = drawing as FibonacciDrawing;
+          const start = converters.toCanvas(fib.start);
+          const end = converters.toCanvas(fib.end);
+          if (!start || !end) return null;
+
+          const clippedX = Math.max(0, Math.min(start.x, end.x, width));
+          const clippedY = Math.max(0, Math.min(start.y, end.y, height));
+          const clippedX2 = Math.min(width, Math.max(start.x, end.x, 0));
+          const clippedY2 = Math.min(height, Math.max(start.y, end.y, 0));
+
+          const rect = {
+            x: clippedX,
+            y: clippedY,
+            width: clippedX2 - clippedX,
+            height: clippedY2 - clippedY,
+          };
+
+          if (rect.width <= 0 || rect.height <= 0) return null;
+
+          const ratios = fib.levels && fib.levels.length > 0 ? fib.levels : [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+          const minPrice = Math.min(fib.start.price, fib.end.price);
+          const maxPrice = Math.max(fib.start.price, fib.end.price);
+          const priceRange = Math.max(1e-12, maxPrice - minPrice);
+          const levels = ratios.map((r) => {
+            const price = minPrice + (maxPrice - minPrice) * r;
+            const canvas = converters.toCanvas({ time: fib.start.time, price });
+            return { ratio: r, price, y: canvas ? canvas.y : NaN };
+          }).filter(l => Number.isFinite(l.y));
+
+          return {
+            drawing: fib,
+            start,
+            end,
+            rect,
+            levels,
+          } as CanvasFibonacci;
+        }
+
         // Handle rectangle and trendline types (both have start and end)
         const drawingWithPoints = drawing as RectangleDrawing | TrendlineDrawing;
         const start = converters.toCanvas(drawingWithPoints.start);
@@ -711,6 +760,18 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
           if (entryRightDistance <= HANDLE_RADIUS + 2) {
             return { drawingId: item.drawing.id, handle: 'point', side: 'right' };
           }
+        } else if (isCanvasFibonacci(item)) {
+          const fibItem = item as CanvasFibonacci;
+          const handles = [
+            { id: 'start', point: fibItem.start },
+            { id: 'end', point: fibItem.end },
+          ] as const;
+          for (const handle of handles) {
+            const distance = Math.hypot(canvasPoint.x - handle.point.x, canvasPoint.y - handle.point.y);
+            if (distance <= HANDLE_RADIUS + 2) {
+              return { drawingId: item.drawing.id, handle: handle.id };
+            }
+          }
         } else {
           const trendlineItem = item as CanvasTrendline;
           const handles = [
@@ -736,7 +797,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
         const item = canvasDrawings[i];
         // If this drawing is locked to an order, do not allow hit-testing (prevents selection/move/resize)
         if (lockedDrawingIds.has(item.drawing.id)) continue;
-        if (isCanvasRectangle(item) || isCanvasVolumeProfile(item)) {
+        if (isCanvasRectangle(item) || isCanvasVolumeProfile(item) || isCanvasFibonacci(item)) {
           if (isPointInRect(canvasPoint, item.rect)) {
             return item.drawing;
           }
@@ -811,7 +872,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
       const svg = event.currentTarget;
       svg.setPointerCapture(event.pointerId);
 
-      if (activeTool === 'rectangle' || activeTool === 'trendline' || activeTool === 'long' || activeTool === 'short' || activeTool === 'volumeProfile') {
+  if (activeTool === 'rectangle' || activeTool === 'trendline' || activeTool === 'long' || activeTool === 'short' || activeTool === 'volumeProfile' || activeTool === 'fibonacci') {
         if (!chartPoint) {
           return;
         }
@@ -966,12 +1027,22 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
   const handleConfirmTrade = useCallback((size: number) => {
     if (!showTradeModal) return;
     const drawing = drawings.find((d) => d.id === showTradeModal.drawingId);
-    if (drawing && (drawing.type === 'long' || drawing.type === 'short')) {
-      const price = (drawing as PositionDrawing).point.price;
+    if (!drawing) {
+      setShowTradeModal(null);
+      return;
+    }
+
+    if (drawing.type === 'long' || drawing.type === 'short') {
+      const pos = drawing as PositionDrawing;
+      const side = pos.type === 'long' ? 'long' : 'short';
+      const price = pos.point.price;
+      const stopLoss = pos.stopLoss;
+      const takeProfit = pos.takeProfit;
+      // Place a pending limit order linked to this drawing
       try {
-        placeLimitOrder(drawing.type, size, price, { drawingId: drawing.id, stopLoss: (drawing as PositionDrawing).stopLoss, takeProfit: (drawing as PositionDrawing).takeProfit });
+        placeLimitOrder(side as any, size, price, { stopLoss, takeProfit, drawingId: drawing.id });
       } catch (err) {
-        // ignore
+        // ignore errors from trading store
       }
     }
     setShowTradeModal(null);
@@ -980,7 +1051,6 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
   const handleCancelTrade = useCallback(() => {
     setShowTradeModal(null);
   }, []);
-
   // Modal drag handlers
   const handleModalDragStart = useCallback((offsetX: number, offsetY: number) => {
     setModalDragging({ offsetX, offsetY });
@@ -1453,6 +1523,41 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
           );
         }
 
+        // Fibonacci drawings (render horizontal retracement levels bounded by the drawing rect)
+        if (isCanvasFibonacci(item)) {
+          const drawing = item.drawing as FibonacciDrawing;
+          const lineX1 = item.rect.x;
+          const lineX2 = item.rect.x + item.rect.width;
+          const labelX = Math.max(item.rect.x + 4, 4);
+          return (
+            <g key={drawing.id} filter={selectionId === drawing.id ? 'url(#selection-shadow)' : undefined}>
+              {item.levels.map((lvl, idx) => (
+                <g key={idx}>
+                  <line
+                    x1={lineX1}
+                    y1={lvl.y}
+                    x2={lineX2}
+                    y2={lvl.y}
+                    stroke={drawing.style.strokeColor ?? '#f59e0b'}
+                    strokeWidth={drawing.style.lineWidth ?? 1.4}
+                    strokeOpacity={drawing.style.opacity ?? 0.9}
+                    strokeDasharray="4 3"
+                  />
+                  <text x={labelX} y={Math.max(item.rect.y + 12, lvl.y - 6)} fill={drawing.style.labelColor ?? (drawing.style.strokeColor ?? '#f59e0b')} fontSize="11" fontWeight={700}>
+                    {`${(lvl.ratio * 100).toFixed(lvl.ratio === 0 || lvl.ratio === 1 ? 0 : 1)}% ${lvl.price.toFixed(pricePrecision)}`}
+                  </text>
+                </g>
+              ))}
+              {selectionId === drawing.id && (
+                <>
+                  <circle cx={item.start.x} cy={item.start.y} r={HANDLE_RADIUS} className="handle" />
+                  <circle cx={item.end.x} cy={item.end.y} r={HANDLE_RADIUS} className="handle" />
+                </>
+              )}
+            </g>
+          );
+        }
+
         if (isCanvasRectangle(item)) {
           const drawing = item.drawing as RectangleDrawing;
           const midlineY = item.rect.y + item.rect.height / 2;
@@ -1750,6 +1855,34 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
               strokeWidth={1.5}
               strokeDasharray="6 3"
             />
+          );
+        }
+
+        if (draft.type === 'fibonacci') {
+          const rect = {
+            x: Math.min(start.x, end.x),
+            y: Math.min(start.y, end.y),
+            width: Math.abs(end.x - start.x),
+            height: Math.abs(end.y - start.y),
+          };
+
+          const minPrice = Math.min(draft.start.price, draft.end.price);
+          const maxPrice = Math.max(draft.start.price, draft.end.price);
+          const ratios = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+          return (
+            <g>
+              {ratios.map((r, i) => {
+                const price = minPrice + (maxPrice - minPrice) * r;
+                const canvas = converters.toCanvas({ time: draft.start.time, price });
+                if (!canvas) return null;
+                return (
+                  <g key={i}>
+                    <line x1={0} y1={canvas.y} x2={width} y2={canvas.y} stroke="#f59e0b" strokeWidth={1.2} strokeDasharray="4 3" />
+                    <text x={6} y={canvas.y - 6} fill="#f59e0b" fontSize="11" fontWeight={700}>{`${(r * 100).toFixed(r === 0 || r === 1 ? 0 : 1)}% ${price.toFixed(pricePrecision)}`}</text>
+                  </g>
+                );
+              })}
+            </g>
           );
         }
 
