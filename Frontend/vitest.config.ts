@@ -9,6 +9,13 @@ export default defineConfig({
     globals: true,
     css: true,
     include: ['src/**/*.{test,spec}.ts', 'src/**/*.{test,spec}.tsx'],
+    // Run tests in a conservative single-worker, forks pool to avoid worker OOMs
+    // `forks` uses child processes instead of worker_threads and is more reliable
+    // for memory-heavy transforms; `execArgv` ensures worker processes receive
+    // increased memory limits.
+  pool: 'forks',
+  // @ts-ignore: execArgv is passed through to worker processes; not in InlineConfig types
+  execArgv: ['--max-old-space-size=4096'],
     // Coverage configuration for Vitest - focus coverage on core logic (state + utils)
     coverage: {
       // Use the v8 provider to leverage Node's built-in coverage (no extra package required)
@@ -26,8 +33,10 @@ export default defineConfig({
         'src/data/**',
         'src/**/*.d.ts'
       ],
-      // Collect coverage for all matched files (even if not imported during tests)
-      all: true,
+    // Collect coverage only for files imported by the tests. Setting `all: false`
+    // reduces memory usage (avoids collecting coverage for large untested UI files)
+    // and produces a coverage report reflecting actually executed code.
+    all: false,
     },
   },
 });

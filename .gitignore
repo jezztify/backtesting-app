@@ -3,3 +3,4 @@ dist/
 .github/
 .vscode/
 Frontend/src/data/*
+Frontend/coverage/
