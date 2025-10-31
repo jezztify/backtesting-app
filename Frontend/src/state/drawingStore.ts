@@ -65,6 +65,8 @@ export const defaultFibonacciStyle = {
   labelColor: '#f59e0b',
 };
 
+export const defaultFibonacciLevels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+
 const generateId = (): string => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID();
@@ -98,6 +100,9 @@ interface DrawingState {
   lastShortStyle: PositionDrawing['style'];
   lastVolumeProfileStyle: VolumeProfileDrawing['style'];
   lastFibonacciStyle: FibonacciDrawing['style'];
+  // Remember last used custom fibonacci levels (ratios 0..1)
+  lastFibonacciLevels: number[];
+  setLastFibonacciLevels: (levels: number[] | undefined) => void;
   setMidlineEnabled: (enabled: boolean) => void;
   setDatasetId: (datasetId: string) => void;
   setActiveTool: (tool: ToolType) => void;
@@ -152,8 +157,10 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
   lastShortStyle: { ...defaultShortStyle },
   lastVolumeProfileStyle: { ...defaultVolumeProfileStyle },
   lastFibonacciStyle: { ...defaultFibonacciStyle },
+  lastFibonacciLevels: [...defaultFibonacciLevels],
   setMidlineEnabled: (enabled) => set({ midlineEnabled: enabled }),
   setDatasetId: (datasetId) => set({ datasetId }),
+  setLastFibonacciLevels: (levels) => set({ lastFibonacciLevels: Array.isArray(levels) ? [...levels] : [] }),
   setActiveTool: (tool) => set({ activeTool: tool, draft: null }),
   beginDraft: (type, start) =>
     set({
@@ -223,7 +230,8 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
         type: 'fibonacci',
         start: { ...draft.start },
         end: { ...draft.end },
-        levels: undefined,
+        // Use last used fibonacci levels for new drawings when available
+        levels: state.lastFibonacciLevels && state.lastFibonacciLevels.length > 0 ? [...state.lastFibonacciLevels] : undefined,
         style: { ...state.lastFibonacciStyle },
       } as FibonacciDrawing;
     } else if (draft.type === 'long') {
@@ -315,7 +323,7 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
       const dsId = get().datasetId || 'default';
       const persisted = loadWorkspaceState(dsId);
       const playbackIndex = persisted?.playbackIndex ?? 0;
-      saveWorkspaceState(dsId, { drawings: get().drawings, playbackIndex });
+      saveWorkspaceState(dsId, { drawings: get().drawings, playbackIndex, lastFibonacciLevels: get().lastFibonacciLevels });
     } catch (err) {
       // Non-fatal: persistence failure shouldn't stop normal operation
       // eslint-disable-next-line no-console
@@ -695,6 +703,8 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
       target.levels = normalized;
       return {
         drawings,
+        // remember last used fibonacci levels for future new drawings
+        lastFibonacciLevels: normalized ?? [],
         undoStack: [...state.undoStack, cloneDrawingList(state.drawings)],
         redoStack: [],
         revision: state.revision + 1,

@@ -125,6 +125,17 @@ const App = () => {
     const persisted = loadWorkspaceState(datasetId);
     if (persisted) {
       loadSnapshot(persisted.drawings);
+      // restore last used fibonacci levels into the drawing store when present
+      if (persisted.lastFibonacciLevels && Array.isArray(persisted.lastFibonacciLevels)) {
+        try {
+          // use the store setter to restore levels
+          // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+          const { useDrawingStore } = require('./state/drawingStore');
+          useDrawingStore.getState().setLastFibonacciLevels(persisted.lastFibonacciLevels);
+        } catch (err) {
+          // non-fatal
+        }
+      }
       setPlaybackIndex((index) => {
         const fallback = Math.max(candles.length - 1, 0);
         return Math.min(persisted.playbackIndex, fallback);
@@ -142,10 +153,24 @@ const App = () => {
     if (typeof window === 'undefined') {
       return;
     }
-    saveWorkspaceState(datasetId, {
-      drawings,
-      playbackIndex,
-    });
+    // Persist drawings + playback index + last-used fibonacci levels
+    try {
+      // read lastFibonacciLevels directly from the drawing store
+      // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+      const { useDrawingStore } = require('./state/drawingStore');
+      const lastFibonacciLevels = useDrawingStore.getState().lastFibonacciLevels;
+      saveWorkspaceState(datasetId, {
+        drawings,
+        playbackIndex,
+        lastFibonacciLevels,
+      });
+    } catch (err) {
+      // fallback: still save drawings/playbackIndex
+      saveWorkspaceState(datasetId, {
+        drawings,
+        playbackIndex,
+      });
+    }
   }, [datasetId, drawings, playbackIndex]);
 
   useEffect(() => {

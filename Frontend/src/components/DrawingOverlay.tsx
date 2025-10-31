@@ -872,7 +872,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
       const svg = event.currentTarget;
       svg.setPointerCapture(event.pointerId);
 
-  if (activeTool === 'rectangle' || activeTool === 'trendline' || activeTool === 'long' || activeTool === 'short' || activeTool === 'volumeProfile' || activeTool === 'fibonacci') {
+      if (activeTool === 'rectangle' || activeTool === 'trendline' || activeTool === 'long' || activeTool === 'short' || activeTool === 'volumeProfile' || activeTool === 'fibonacci') {
         if (!chartPoint) {
           return;
         }
@@ -1444,12 +1444,12 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
         </filter>
       </defs>
 
-      {/* Transparent rect to capture pointer events in the main pane area only (excluding axes) */}
+      {/* Transparent rect to capture pointer events over the full canvas area supplied by the parent */}
       <rect
         x="0"
         y="0"
-        width={Math.max(0, width - 60)}
-        height={Math.max(0, height - 50)}
+        width={width}
+        height={height}
         fill="transparent"
         style={{ pointerEvents: 'auto' }}
       />
@@ -1543,7 +1543,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
                     strokeOpacity={drawing.style.opacity ?? 0.9}
                     strokeDasharray="4 3"
                   />
-                  <text x={labelX} y={Math.max(item.rect.y + 12, lvl.y - 6)} fill={drawing.style.labelColor ?? (drawing.style.strokeColor ?? '#f59e0b')} fontSize="11" fontWeight={700}>
+                  <text x={labelX} y={Math.max(item.rect.y + 12, lvl.y - 6)} fill={drawing.style.labelColor ?? (drawing.style.strokeColor ?? '#f59e0b')} fontSize="8" fontWeight={700}>
                     {`${(lvl.ratio * 100).toFixed(lvl.ratio === 0 || lvl.ratio === 1 ? 0 : 1)}% ${lvl.price.toFixed(pricePrecision)}`}
                   </text>
                 </g>
@@ -1740,7 +1740,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
                 }
 
                 return (
-                  <text x={entryX} y={entryYPos} fill={color} fontSize="12" fontWeight="bold">
+                  <text x={entryX} y={entryYPos} fill={color} fontSize="8" fontWeight="bold">
                     {entryText}
                     {rrText && (
                       <tspan fill={color} fontWeight={600} dx="8">
@@ -1878,7 +1878,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
                 return (
                   <g key={i}>
                     <line x1={0} y1={canvas.y} x2={width} y2={canvas.y} stroke="#f59e0b" strokeWidth={1.2} strokeDasharray="4 3" />
-                    <text x={6} y={canvas.y - 6} fill="#f59e0b" fontSize="11" fontWeight={700}>{`${(r * 100).toFixed(r === 0 || r === 1 ? 0 : 1)}% ${price.toFixed(pricePrecision)}`}</text>
+                    <text x={6} y={canvas.y - 6} fill="#f59e0b" fontSize="8" fontWeight={700}>{`${(r * 100).toFixed(r === 0 || r === 1 ? 0 : 1)}% ${price.toFixed(pricePrecision)}`}</text>
                   </g>
                 );
               })}
