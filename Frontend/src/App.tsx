@@ -56,6 +56,11 @@ const App = () => {
   const [tickRate, setTickRate] = useState<TickRate>(10);
   const [tickSource, setTickSource] = useState<Timeframe>('M1'); // The base timeframe to use as tick data
   const [timeframe, setTimeframe] = useState<Timeframe>('Daily');
+  // When in dual layout, the second chart can use an independent timeframe
+  const [timeframeRight, setTimeframeRight] = useState<Timeframe>(timeframe);
+  const [candlesRight, setCandlesRight] = useState<Candle[]>(candles);
+  // Layout: 'single' or 'dual' charts
+  const [layout, setLayout] = useState<'single' | 'dual'>('single');
   const [isAggregating, setIsAggregating] = useState<boolean>(false);
   const [aggregationProgress, setAggregationProgress] = useState<number>(0);
   const [useTickPlayback, setUseTickPlayback] = useState<boolean>(true); // Enable tick-by-tick playback
@@ -337,6 +342,7 @@ const App = () => {
         setAggregationProgress(Math.floor((processed / total) * 100));
       }).then((aggregated) => {
         setCandles(aggregated);
+        setCandlesRight(aggregated);
         setPlaybackIndex(0); // Start from beginning for tick playback
         setIsAggregating(false);
         setAggregationProgress(0);
@@ -359,6 +365,26 @@ const App = () => {
     }
 
     setIsPlaying(false);
+  };
+
+  // Wrapper handlers for embedding timeframe selectors inside each canvas.
+  // If we have raw M1 tick data, delegate to the aggregation handlers which
+  // re-aggregate and update candles; otherwise just update the timeframe state
+  // so the UI reflects the selection (non-tick datasets don't need aggregation).
+  const onLeftTimeframeChange = async (newTf: Timeframe) => {
+    if (rawM1Candles) {
+      await handleTimeframeChange(newTf);
+    } else {
+      setTimeframe(newTf);
+    }
+  };
+
+  const onRightTimeframeChange = async (newTf: Timeframe) => {
+    if (rawM1Candles) {
+      await handleTimeframeChangeRight(newTf);
+    } else {
+      setTimeframeRight(newTf);
+    }
   };
 
   const handleTimeframeChange = async (newTimeframe: Timeframe) => {
@@ -431,6 +457,64 @@ const App = () => {
     if (wasPlaying) {
       setIsPlaying(true);
     }
+  };
+
+  // Change timeframe for the right-side chart only (dual layout). This mirrors
+  // handleTimeframeChange but updates `candlesRight` and `timeframeRight` so
+  // the second chart can display an independent aggregation.
+  const handleTimeframeChangeRight = async (newTimeframe: Timeframe) => {
+    if (!rawM1Candles) {
+      return;
+    }
+
+    const currentTimestamp = tickSourceData && playbackIndex < tickSourceData.length
+      ? tickSourceData[playbackIndex].time
+      : null;
+
+    setTimeframeRight(newTimeframe);
+    const wasPlaying = isPlaying;
+    setIsPlaying(false);
+    setIsAggregating(true);
+    setAggregationProgress(0);
+
+    const timeframes: Timeframe[] = ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'Daily', 'Weekly', 'Monthly'];
+    const newTimeframeIndex = timeframes.indexOf(newTimeframe);
+    const currentTickSourceIndex = timeframes.indexOf(tickSource);
+
+    let effectiveTickSource = tickSource;
+    if (currentTickSourceIndex > newTimeframeIndex) {
+      effectiveTickSource = 'M1';
+    }
+
+    // Aggregate from M1 to effective tick source if needed
+    let sourceData = rawM1Candles;
+    if (effectiveTickSource !== 'M1') {
+      sourceData = await streamAggregateCandles(rawM1Candles, effectiveTickSource, (processed, total) => {
+        setAggregationProgress(Math.floor((processed / total) * 50));
+      });
+    }
+
+    // Aggregate from tick source to the requested display timeframe
+    const aggregated = await streamAggregateCandles(sourceData, newTimeframe, (processed, total) => {
+      const baseProgress = effectiveTickSource !== 'M1' ? 50 : 0;
+      setAggregationProgress(baseProgress + Math.floor((processed / total) * 50));
+    });
+
+    setCandlesRight(aggregated);
+
+    // Map playback index into sourceData
+    if (currentTimestamp !== null) {
+      const newIndex = sourceData.findIndex(c => c.time >= currentTimestamp);
+      if (newIndex !== -1) setPlaybackIndex(newIndex);
+      else setPlaybackIndex(Math.max(sourceData.length - 1, 0));
+    } else {
+      setPlaybackIndex(0);
+    }
+
+    setIsAggregating(false);
+    setAggregationProgress(0);
+
+    if (wasPlaying) setIsPlaying(true);
   };
 
   const handleResetSample = () => {
@@ -584,13 +668,14 @@ const App = () => {
         <div className="header-controls">
           <ThemeToggle value={themePreference} onChange={setThemePreference} />
           <DataLoader onDatasetLoaded={handleDatasetLoaded} />
-          {rawM1Candles && (
-            <TimeframeSelector
-              selectedTimeframe={timeframe}
-              onTimeframeChange={handleTimeframeChange}
-              disabled={isAggregating}
-            />
-          )}
+          {/* Layout selector placed next to Load Market Data (DataLoader) */}
+          <label style={{ marginLeft: 12, display: 'inline-flex', alignItems: 'center' }}>
+            Layout:
+            <select value={layout} onChange={(e) => setLayout(e.target.value as any)} style={{ marginLeft: 8 }}>
+              <option value="single">1 chart</option>
+              <option value="dual">2 charts</option>
+            </select>
+          </label>
           {isAggregating && (
             <div className="aggregation-indicator">
               Aggregating data... {aggregationProgress}%
@@ -613,26 +698,66 @@ const App = () => {
             onOpenCanvasSettings={() => setShowCanvasModal(true)}
           />
           <div className="chart-area" style={{ flex: 1, minWidth: 0 }}>
-            <div className="chart-wrapper">
-              <ChartContainer
-                candles={candles}
-                // Pass the raw playbackIndex (in base tick units) so the chart
-                // can re-aggregate base ticks up to the correct tick when
-                // building the visible dataset. Previously this passed the
-                // derived displayPlaybackIndex which is an index into the
-                // already-aggregated display candles; that caused mismatches
-                // when the chart re-aggregated using the wrong index and led
-                // to the inconsistent dates observed when switching timeframes.
-                playbackIndex={playbackIndex}
-                timeframe={timeframe}
-                isPlaying={isPlaying}
-                theme={effectiveTheme}
-                onChartReady={handleChartReady}
-                showCanvasModal={showCanvasModal}
-                setShowCanvasModal={setShowCanvasModal}
-                baseTicks={tickSourceData}
-                baseTimeframe={tickSource}
-              />
+            <div className="chart-wrapper" style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
+              {layout === 'single' ? (
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', marginBottom: 8 }}>
+                    <TimeframeSelector selectedTimeframe={timeframe} onTimeframeChange={onLeftTimeframeChange} disabled={isAggregating} />
+                  </div>
+                  <ChartContainer
+                    candles={candles}
+                    playbackIndex={playbackIndex}
+                    timeframe={timeframe}
+                    isPlaying={isPlaying}
+                    theme={effectiveTheme}
+                    onChartReady={handleChartReady}
+                    showCanvasModal={showCanvasModal}
+                    setShowCanvasModal={setShowCanvasModal}
+                    baseTicks={tickSourceData}
+                    baseTimeframe={tickSource}
+                  />
+                </div>
+              ) : (
+                // Dual layout: render two ChartContainers side-by-side that share the same
+                // drawing store and base tick data, but can use independent timeframes.
+                <>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', marginBottom: 8 }}>
+                      <TimeframeSelector selectedTimeframe={timeframe} onTimeframeChange={onLeftTimeframeChange} disabled={isAggregating} />
+                    </div>
+                    <ChartContainer
+                      candles={candles}
+                      playbackIndex={playbackIndex}
+                      timeframe={timeframe}
+                      isPlaying={isPlaying}
+                      theme={effectiveTheme}
+                      onChartReady={handleChartReady}
+                      showCanvasModal={showCanvasModal}
+                      setShowCanvasModal={setShowCanvasModal}
+                      baseTicks={tickSourceData}
+                      baseTimeframe={tickSource}
+                    />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', marginBottom: 8 }}>
+                      <TimeframeSelector selectedTimeframe={timeframeRight} onTimeframeChange={onRightTimeframeChange} disabled={isAggregating} />
+                    </div>
+                    <ChartContainer
+                      candles={candlesRight}
+                      playbackIndex={playbackIndex}
+                      timeframe={timeframeRight}
+                      isPlaying={isPlaying}
+                      theme={effectiveTheme}
+                      // second chart doesn't need to rebind the shared onChartReady
+                      onChartReady={undefined}
+                      showCanvasModal={showCanvasModal}
+                      setShowCanvasModal={setShowCanvasModal}
+                      baseTicks={tickSourceData}
+                      baseTimeframe={tickSource}
+                    />
+                  </div>
+                </>
+              )}
             </div>
             <div className="playback-panel">
               <PlaybackControls
