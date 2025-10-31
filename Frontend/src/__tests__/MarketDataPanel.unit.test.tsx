@@ -46,12 +46,12 @@ describe('MarketDataPanel', () => {
       vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock');
     }
     if (!(URL as any).revokeObjectURL) {
-      (URL as any).revokeObjectURL = vi.fn(() => {});
+      (URL as any).revokeObjectURL = vi.fn(() => { });
     } else {
-      vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+      vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => { });
     }
     // Spy on anchor click to ensure save is triggered
-    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => { });
 
     render(<MarketDataPanel />);
 

@@ -25,7 +25,7 @@ vi.mock('../state/canvasStore', () => {
 
 describe('ToolSidebar component', () => {
   test('renders dataset label and timeframe, toggles collapse', () => {
-  render(<ToolSidebar datasetLabel="Sample" timeframe={'M1'} onResetSample={() => {}} onOpenCanvasSettings={() => {}} />);
+    render(<ToolSidebar datasetLabel="Sample" timeframe={'M1'} onResetSample={() => { }} onOpenCanvasSettings={() => { }} />);
     expect(screen.getByText('Sample')).toBeInTheDocument();
     expect(screen.getByText(/Timeframe:/)).toBeInTheDocument();
     // click collapse

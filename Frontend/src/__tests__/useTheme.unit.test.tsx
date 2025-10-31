@@ -16,7 +16,7 @@ function HookUser() {
 describe('useTheme', () => {
   beforeEach(() => {
     // mock matchMedia
-    (window as any).matchMedia = (query: string) => ({ matches: true, addEventListener: () => {}, removeEventListener: () => {} });
+    (window as any).matchMedia = (query: string) => ({ matches: true, addEventListener: () => { }, removeEventListener: () => { } });
     window.localStorage.clear();
   });
 

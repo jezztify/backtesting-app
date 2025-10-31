@@ -26,9 +26,9 @@ describe('MarketDataPanel helpers', () => {
   test('date helpers produce consistent strings and increments', () => {
     const d = new Date('2025-10-31T00:00:00Z');
     expect(formatDateTime(d)).toContain('2025-10-31');
-  const d2 = addDays(d, 2);
-  // sanity: day number should change (handles month rollover)
-  expect(d2.getDate()).not.toBe(d.getDate());
+    const d2 = addDays(d, 2);
+    // sanity: day number should change (handles month rollover)
+    expect(d2.getDate()).not.toBe(d.getDate());
     const d3 = addInterval(d, '1h');
     expect(d3.getTime()).toBeGreaterThan(d.getTime());
   });
