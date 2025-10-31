@@ -2,11 +2,11 @@ import type { Instrument } from 'dukascopy-node';
 import React, { useEffect, useState } from 'react';
 
 // Small helpers
-function sleep(ms: number) {
+export function sleep(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function floorDate(date: Date, interval: string) {
+export function floorDate(date: Date, interval: string) {
     const d = new Date(date);
     switch (interval) {
         case '1min':
@@ -44,7 +44,7 @@ function floorDate(date: Date, interval: string) {
     return d;
 }
 
-function aggregateOHLCV(data: any[], fromInterval: string, toInterval: string) {
+export function aggregateOHLCV(data: any[], fromInterval: string, toInterval: string) {
     if (fromInterval === toInterval) return data;
     const grouped: Record<string, any[]> = {};
     for (const row of data) {
@@ -66,17 +66,17 @@ function aggregateOHLCV(data: any[], fromInterval: string, toInterval: string) {
     return result;
 }
 
-function formatDateTime(date: Date) {
+export function formatDateTime(date: Date) {
     return date.toISOString().replace('T', ' ').slice(0, 19);
 }
 
-function addDays(date: Date, days: number) {
+export function addDays(date: Date, days: number) {
     const d = new Date(date);
     d.setDate(d.getDate() + days);
     return d;
 }
 
-function addInterval(date: Date, interval: string) {
+export function addInterval(date: Date, interval: string) {
     const d = new Date(date);
     switch (interval) {
         case '1min':
@@ -113,7 +113,7 @@ function addInterval(date: Date, interval: string) {
     return d;
 }
 
-function normalizeDukascopyValues(values: any[]) {
+export function normalizeDukascopyValues(values: any[]) {
     // Dukascopy sample format: { timestamp: 1759276800000, open: 1.17342, high: ..., low: ..., close: ..., volume: ... }
     // Normalize to the frontend's expected shape: { datetime: 'YYYY-MM-DD HH:mm:ss', open: '...', high: '...', low: '...', close: '...', volume: '...'}
     if (!Array.isArray(values)) return [];
@@ -185,7 +185,7 @@ const saveDataAsFile = (data: any, filename: string, type: 'json' | 'csv' = 'jso
 };
 
 // Twelve Data chunked fetch (5-day chunks, rate-limited)
-async function fetchTwelveDataChunked(symbol: string, interval: string, apiKey: string, startDate: string, endDate: string) {
+export async function fetchTwelveDataChunked(symbol: string, interval: string, apiKey: string, startDate: string, endDate: string) {
     const allValues: any[] = [];
     let current = new Date(startDate);
     const end = new Date(endDate);
