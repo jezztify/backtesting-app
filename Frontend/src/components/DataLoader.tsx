@@ -114,7 +114,38 @@ const DataLoader = ({ onDatasetLoaded }: DataLoaderProps) => {
 
         // Handle Dukascopy native JSON (array or wrapped in .values/.data)
         const vals = Array.isArray(json) ? json : Array.isArray(json.values) ? json.values : Array.isArray(json.data) ? json.data : [];
-        const dukCands = parseDukascopyArray(vals);
+
+        // Dukascopy comes in two common JSON shapes:
+        // 1) array of objects: [{ timestamp, open, high, low, close, volume }, ...]
+        // 2) array of arrays: [[ts, open, high, low, close, volume], ...]
+        let dukCands: Candle[] = [];
+        if (vals.length > 0 && Array.isArray(vals[0])) {
+          // arrays-of-arrays case
+          dukCands = (vals as any[])
+            .map((arr) => {
+              if (!Array.isArray(arr) || arr.length < 5) return null;
+              let ts: any = arr[0];
+              if (typeof ts === 'string' && /^\d+$/.test(ts)) ts = Number(ts);
+              if (typeof ts === 'number') {
+                // Normalize to seconds (dukascopy timestamps may be ms)
+                while (ts > 1e11) {
+                  ts = Math.floor(ts / 1000);
+                }
+              }
+              const timeSec = Number.isFinite(ts) ? Math.floor(ts) : undefined;
+              const o = parseFloat(String(arr[1]));
+              const h = parseFloat(String(arr[2]));
+              const l = parseFloat(String(arr[3]));
+              const c = parseFloat(String(arr[4]));
+              const vol = arr.length >= 6 ? Number(arr[5]) : undefined;
+              if (timeSec == null || [o, h, l, c].some((n) => Number.isNaN(n))) return null;
+              return { time: timeSec, open: o, high: h, low: l, close: c, volume: typeof vol === 'number' && !Number.isNaN(vol) ? vol : undefined } as Candle;
+            })
+            .filter((c) => c !== null) as Candle[];
+        } else {
+          dukCands = parseDukascopyArray(vals);
+        }
+
         if (dukCands.length > 0) {
           const timeframe = detectTimeframeFromFilename(file.name) || 'Unknown';
           onDatasetLoaded(file.name.replace(/\.(csv|json)$/i, ''), dukCands, timeframe);
