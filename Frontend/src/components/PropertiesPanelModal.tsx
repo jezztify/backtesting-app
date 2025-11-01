@@ -11,7 +11,7 @@ interface PropertiesPanelModalProps {
     readOnly?: boolean;
 }
 
-const clampLineWidth = (value: number): number => Math.min(Math.max(value, 1), 8);
+import { clampLineWidth, parseFibonacciLevels, formatLevelsDisplay } from '../utils/propertiesPanel.helpers';
 
 const PropertiesPanelModal = ({ drawingId, onClose, onDragStart, pricePrecision, readOnly = false }: PropertiesPanelModalProps) => {
     // Place drawings and selectedDrawing at the very top so hooks can use them
@@ -784,20 +784,9 @@ const PropertiesPanelModal = ({ drawingId, onClose, onDragStart, pricePrecision,
 
         const handleApplyLevels = () => {
             if (readOnly) return;
-            const parts = levelsText.split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
-            const parsed = parts.map((p) => {
-                if (p.endsWith('%')) {
-                    const num = parseFloat(p.slice(0, -1));
-                    return isNaN(num) ? NaN : num / 100;
-                }
-                const num = parseFloat(p);
-                if (!isNaN(num)) {
-                    return num > 1 ? Math.min(Math.max(num / 100, 0), 1) : Math.min(Math.max(num, 0), 1);
-                }
-                return NaN;
-            }).filter(Number.isFinite).map(n => Math.min(Math.max(n, 0), 1));
+            const parsed = parseFibonacciLevels(levelsText);
             updateFibonacciLevels(fib.id, parsed.length > 0 ? parsed : undefined);
-            const display = (parsed.length > 0 ? parsed : [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]).map(l => (l * 100).toFixed(l === 0 || l === 1 ? 0 : 1) + '%').join(', ');
+            const display = formatLevelsDisplay(parsed.length > 0 ? parsed : undefined);
             setLevelsText(display);
         };
 

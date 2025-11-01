@@ -967,4 +967,70 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
   );
 };
 
+// Converters extracted for unit testing: pure functions that mirror the runtime
+// behavior of the internal converters used inside the component.
+export const toCanvasPoint = (
+  point: { time: any; price: number },
+  chart: any,
+  series: any,
+  candlesRef: any[]
+): { x: number; y: number } | null => {
+  if (!chart || !series || !Array.isArray(candlesRef) || candlesRef.length === 0) {
+    return null;
+  }
+
+  const timeScale = chart.timeScale();
+  let x = timeScale.timeToCoordinate(point.time as Time);
+  const y = series.priceToCoordinate(point.price);
+
+  // Extrapolate if necessary when timeToCoordinate returns null/undefined
+  if (x === null || x === undefined) {
+    const firstCandleTime = normalizeTime(candlesRef[0].time as Time);
+    const lastCandleTime = normalizeTime(candlesRef[candlesRef.length - 1].time as Time);
+
+    if (firstCandleTime !== null && lastCandleTime !== null) {
+      const x1 = timeScale.timeToCoordinate(candlesRef[0].time as Time);
+      const x2 = timeScale.timeToCoordinate(candlesRef[candlesRef.length - 1].time as Time);
+
+      if (x1 !== null && x2 !== null) {
+        const timeRange = lastCandleTime - firstCandleTime;
+        const pixelRange = x2 - x1;
+
+        if (timeRange > 0) {
+          const pixelsPerTimeUnit = pixelRange / timeRange;
+          const timeFromFirst = point.time - firstCandleTime;
+          x = (x1 + timeFromFirst * pixelsPerTimeUnit) as any;
+        }
+      }
+    }
+  }
+
+  if (x === undefined || y === undefined || x === null || y === null) {
+    return null;
+  }
+
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return null;
+  }
+
+  return { x, y };
+};
+
+export const toChartPoint = (canvasPoint: { x: number; y: number }, chart: any, series: any): { time: number; price: number } | null => {
+  if (!chart || !series) {
+    return null;
+  }
+  const time = chart.timeScale().coordinateToTime(canvasPoint.x);
+  const price = series.coordinateToPrice(canvasPoint.y);
+  if (price === null || price === undefined) {
+    return null;
+  }
+  const normalizedTime = normalizeTime(time);
+  if (normalizedTime === null) {
+    return null;
+  }
+  return { time: normalizedTime, price };
+};
+
+export { normalizeTime, offsetTimeByBars, normalizeVisibleData, getChartThemeColors, readCssVariable, createChartInstance, applyThemeToChart };
 export default ChartContainer;

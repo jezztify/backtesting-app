@@ -772,5 +772,7 @@ function formatLot(size: number, lotSize: number = 100000, decimals: number = 2)
     return `${s} ${label}`;
 }
 
+export { computePnl, formatLot };
+
 export default TradingPanel;
 

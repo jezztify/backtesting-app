@@ -98,7 +98,7 @@ const RECTANGLE_OPPOSITE_HANDLE: Record<RectangleHandle, RectangleHandle> = {
 
 const isRectangleHandle = (handle: HandleType): handle is RectangleHandle => RECTANGLE_HANDLES.includes(handle as RectangleHandle);
 
-const getRectangleHandlePositions = (rect: { x: number; y: number; width: number; height: number }) => ({
+export const getRectangleHandlePositions = (rect: { x: number; y: number; width: number; height: number }) => ({
   'top-left': { x: rect.x, y: rect.y },
   'top-right': { x: rect.x + rect.width, y: rect.y },
   'bottom-left': { x: rect.x, y: rect.y + rect.height },
@@ -107,7 +107,7 @@ const getRectangleHandlePositions = (rect: { x: number; y: number; width: number
   'middle-right': { x: rect.x + rect.width, y: rect.y + rect.height / 2 },
 } as const);
 
-const getRectangleChartCorners = (start: ChartPoint, end: ChartPoint) => {
+export const getRectangleChartCorners = (start: ChartPoint, end: ChartPoint) => {
   const minTime = Math.min(start.time, end.time);
   const maxTime = Math.max(start.time, end.time);
   const minPrice = Math.min(start.price, end.price);
@@ -124,12 +124,12 @@ const getRectangleChartCorners = (start: ChartPoint, end: ChartPoint) => {
   } as const;
 };
 
-const getRectangleOppositeCorner = (handle: RectangleHandle, start: ChartPoint, end: ChartPoint): ChartPoint => {
+export const getRectangleOppositeCorner = (handle: RectangleHandle, start: ChartPoint, end: ChartPoint): ChartPoint => {
   const corners = getRectangleChartCorners(start, end);
   return corners[RECTANGLE_OPPOSITE_HANDLE[handle]];
 };
 
-const getPositionHandleXs = (rect: { x: number; width: number }): { left: number; right: number } => {
+export const getPositionHandleXs = (rect: { x: number; width: number }): { left: number; right: number } => {
   const left = rect.x;
   const right = rect.x + rect.width;
 
@@ -141,7 +141,7 @@ const getPositionHandleXs = (rect: { x: number; width: number }): { left: number
   return { left, right };
 };
 
-const clampPositionPrice = (drawing: PositionDrawing, handle: PositionHandleType, price: number): number => {
+export const clampPositionPrice = (drawing: PositionDrawing, handle: PositionHandleType, price: number): number => {
   const entry = drawing.point.price;
   const takeProfit = drawing.takeProfit;
   const stopLoss = drawing.stopLoss;
@@ -173,7 +173,7 @@ const clampPositionPrice = (drawing: PositionDrawing, handle: PositionHandleType
   return Math.min(Math.max(price, minBound), maxBound);
 };
 
-const hasMinimumVerticalSpacing = (
+export const hasMinimumVerticalSpacing = (
   drawing: PositionDrawing,
   handle: PositionHandleType,
   candidatePrice: number,
@@ -211,7 +211,7 @@ const hasMinimumVerticalSpacing = (
   return true;
 };
 
-const normalizeRectanglePoints = (a: ChartPoint, b: ChartPoint): { start: ChartPoint; end: ChartPoint } => {
+export const normalizeRectanglePoints = (a: ChartPoint, b: ChartPoint): { start: ChartPoint; end: ChartPoint } => {
   const minTime = Math.min(a.time, b.time);
   const maxTime = Math.max(a.time, b.time);
   const minPrice = Math.min(a.price, b.price);
@@ -281,7 +281,7 @@ const isCanvasFibonacci = (value: CanvasDrawing | CanvasFibonacci): value is Can
 const isCanvasRectangle = (value: CanvasDrawing): value is CanvasRectangle => value.drawing.type === 'rectangle';
 const isCanvasPosition = (value: CanvasDrawing): value is CanvasPosition => value.drawing.type === 'long' || value.drawing.type === 'short';
 
-const getPointerPosition = (event: PointerEvent<SVGSVGElement>): { x: number; y: number } | null => {
+export const getPointerPosition = (event: PointerEvent<SVGSVGElement>): { x: number; y: number } | null => {
   const rect = (event.currentTarget as SVGSVGElement).getBoundingClientRect();
   if (!rect) {
     return null;
@@ -294,7 +294,7 @@ const getPointerPosition = (event: PointerEvent<SVGSVGElement>): { x: number; y:
 
 // Snap a given price at a given time to the nearest candle's high or low (whichever is closer).
 // Returns the original price if no candles are available.
-const snapToNearestCandleHighLow = (time: number, price: number, candles?: Candle[]): number => {
+export const snapToNearestCandleHighLow = (time: number, price: number, candles?: Candle[]): number => {
   if (!candles || candles.length === 0) return price;
   // Find the candle with the nearest time
   let best: Candle | null = null;
@@ -315,7 +315,7 @@ const snapToNearestCandleHighLow = (time: number, price: number, candles?: Candl
 };
 
 // Snap specifically to the nearest candle high (returns original price if none)
-const snapToNearestCandleHigh = (time: number, candles?: Candle[]): number | null => {
+export const snapToNearestCandleHigh = (time: number, candles?: Candle[]): number | null => {
   if (!candles || candles.length === 0) return null;
   let best: Candle | null = null;
   let bestDelta = Infinity;
@@ -331,7 +331,7 @@ const snapToNearestCandleHigh = (time: number, candles?: Candle[]): number | nul
 };
 
 // Snap specifically to the nearest candle low (returns original price if none)
-const snapToNearestCandleLow = (time: number, candles?: Candle[]): number | null => {
+export const snapToNearestCandleLow = (time: number, candles?: Candle[]): number | null => {
   if (!candles || candles.length === 0) return null;
   let best: Candle | null = null;
   let bestDelta = Infinity;
