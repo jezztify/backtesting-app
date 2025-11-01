@@ -380,7 +380,8 @@ header {
   width: 100%;
   min-width: 0;
   overflow: hidden;
-  padding: 1rem 1.5rem 0.75rem 1rem;
+  /* reduce bottom padding so chart time axis has room to render */
+  padding: 0rem 0.2rem 2.5rem 0.2rem;
 }
 
 .chart-container {
@@ -415,12 +416,24 @@ header {
   stroke-width: 1.5;
 }
 
-.playback-panel {
-  padding: 1.2rem 1.5rem;
+.bottom-panel {
+  display: flex;
+  flex-direction: column; /* stack rows: playback controls on top, trading panel below */
+  align-items: stretch;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
   background: var(--color-playback-surface);
   border-top: 1px solid var(--color-playback-border);
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.15);
   backdrop-filter: blur(18px);
+}
+
+.bottom-panel .playback-area {
+  width: 100%;
+}
+
+.bottom-panel .trading-area {
+  width: 100%;
 }
 
 .playback-controls {
@@ -690,4 +703,11 @@ button.ghost:hover {
   .playback-speed {
     justify-content: space-between;
   }
+}
+
+/* Dark mode: force specific trading panel labels/values to black */
+:root[data-theme='dark'] .bottom-panel .trading-area .trading-panel .trading-panel-title,
+:root[data-theme='dark'] .bottom-panel .trading-area .trading-panel .tp-label,
+:root[data-theme='dark'] .bottom-panel .trading-area .trading-panel .tp-value {
+  color: #000 !important;
 }

@@ -224,30 +224,30 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
     const [chartType, setChartType] = useState<'equity' | 'pnl' | 'drawdown' | 'winloss'>('equity');
 
     return (
-        <div style={{ borderRadius: 8, background: '#fafafa', border: '1px solid #e5e7eb' }}>
+        <div className="trading-panel" style={{ borderRadius: 8, background: '#fafafa', border: '1px solid #e5e7eb' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 10, cursor: 'pointer' }} onClick={() => setCollapsed((c) => !c)}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <strong>Trading Panel</strong>
+                    <strong className="trading-panel-title">Trading Panel</strong>
                 </div>
 
                 {/* center compact summary when collapsed */}
                 {collapsed && (
                     <div style={{ display: 'flex', gap: 14, alignItems: 'center', justifyContent: 'center', flex: 1 }}>
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: 11, color: '#6b7280' }}>Start</div>
-                            <div style={{ fontWeight: 700, fontSize: 12 }}>${format(startingBalance)}</div>
+                            <div className="tp-label" style={{ fontSize: 11, color: '#6b7280' }}>Start</div>
+                            <div className="tp-value" style={{ fontWeight: 700, fontSize: 12 }}>${format(startingBalance)}</div>
                         </div>
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: 11, color: '#6b7280' }}>Equity</div>
-                            <div style={{ fontWeight: 700, fontSize: 12 }}>${format(equity)}</div>
+                            <div className="tp-label" style={{ fontSize: 11, color: '#6b7280' }}>Equity</div>
+                            <div className="tp-value" style={{ fontWeight: 700, fontSize: 12 }}>${format(equity)}</div>
                         </div>
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: 11, color: '#6b7280' }}>Realized</div>
-                            <div style={{ fontWeight: 700, fontSize: 12 }}>${format(realizedPnl)}</div>
+                            <div className="tp-label" style={{ fontSize: 11, color: '#6b7280' }}>Realized</div>
+                            <div className="tp-value" style={{ fontWeight: 700, fontSize: 12 }}>${format(realizedPnl)}</div>
                         </div>
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: 11, color: '#6b7280' }}>Unrealized</div>
-                            <div style={{ fontWeight: 700, fontSize: 12 }}>${format(unrealizedPnl)}</div>
+                            <div className="tp-label" style={{ fontSize: 11, color: '#6b7280' }}>Unrealized</div>
+                            <div className="tp-value" style={{ fontWeight: 700, fontSize: 12 }}>${format(unrealizedPnl)}</div>
                         </div>
                     </div>
                 )}
@@ -288,20 +288,20 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
 
                     <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
                         <div style={{ flex: 1 }}>
-                            <label style={{ fontSize: 12 }}>Starting</label>
-                            <div style={{ fontWeight: 700 }}>${format(startingBalance, pricePrecision)}</div>
+                            <label className="tp-label" style={{ fontSize: 12 }}>Starting</label>
+                            <div className="tp-value" style={{ fontWeight: 700 }}>${format(startingBalance, pricePrecision)}</div>
                         </div>
                         <div style={{ flex: 1 }}>
-                            <label style={{ fontSize: 12 }}>Equity</label>
-                            <div style={{ fontWeight: 700 }}>${format(equity, pricePrecision)}</div>
+                            <label className="tp-label" style={{ fontSize: 12 }}>Equity</label>
+                            <div className="tp-value" style={{ fontWeight: 700 }}>${format(equity, pricePrecision)}</div>
                         </div>
                         <div style={{ flex: 1 }}>
-                            <label style={{ fontSize: 12 }}>Realized P&L</label>
-                            <div style={{ fontWeight: 700 }}>${format(realizedPnl, pricePrecision)}</div>
+                            <label className="tp-label" style={{ fontSize: 12 }}>Realized P&L</label>
+                            <div className="tp-value" style={{ fontWeight: 700 }}>${format(realizedPnl, pricePrecision)}</div>
                         </div>
                         <div style={{ flex: 1 }}>
-                            <label style={{ fontSize: 12 }}>Unrealized P&L</label>
-                            <div style={{ fontWeight: 700 }}>${format(unrealizedPnl, pricePrecision)}</div>
+                            <label className="tp-label" style={{ fontSize: 12 }}>Unrealized P&L</label>
+                            <div className="tp-value" style={{ fontWeight: 700 }}>${format(unrealizedPnl, pricePrecision)}</div>
                         </div>
                     </div>
 

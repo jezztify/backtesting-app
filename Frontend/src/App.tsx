@@ -661,31 +661,35 @@ const App = () => {
 
   return (
     <div className="app">
-      <header>
-        <div className="header-title">
-          <h1>Manual Backtesting Workspace</h1>
+      <header style={{ height: 24, overflow: 'hidden' }}>
+        <div className="header-title" style={{ height: 24, display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+          <h1 style={{ fontSize: 12, margin: 0, lineHeight: '20px' }}>Backtesting Workspace</h1>
         </div>
-        <div className="header-controls">
-          <ThemeToggle value={themePreference} onChange={setThemePreference} />
-          <DataLoader onDatasetLoaded={handleDatasetLoaded} />
+        <div className="header-controls" style={{ display: 'flex', alignItems: 'center', gap: 8, height: 24, overflow: 'hidden' }}>
+          <div style={{ height: 20, display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+            <ThemeToggle value={themePreference} onChange={setThemePreference} />
+          </div>
+          <div style={{ height: 20, display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+            <DataLoader onDatasetLoaded={handleDatasetLoaded} />
+          </div>
           {/* Layout selector placed next to Load Market Data (DataLoader) */}
-          <label style={{ marginLeft: 12, display: 'inline-flex', alignItems: 'center' }}>
+          <label style={{ marginLeft: 12, display: 'inline-flex', alignItems: 'center', height: 20, fontSize: 12 }}>
             Layout:
-            <select value={layout} onChange={(e) => setLayout(e.target.value as any)} style={{ marginLeft: 8 }}>
+            <select value={layout} onChange={(e) => setLayout(e.target.value as any)} style={{ marginLeft: 8, height: 20, fontSize: 12, padding: '0 6px' }}>
               <option value="single">1 chart</option>
               <option value="dual">2 charts</option>
             </select>
           </label>
           {isAggregating && (
-            <div className="aggregation-indicator">
+            <div className="aggregation-indicator" style={{ height: 20, fontSize: 12, display: 'flex', alignItems: 'center' }}>
               Aggregating data... {aggregationProgress}%
             </div>
           )}
           <button
-            style={{ marginLeft: 16, padding: '6px 18px', borderRadius: 8, border: 'none', background: '#2563eb', color: '#fff', fontWeight: 500, cursor: 'pointer' }}
+            style={{ marginLeft: 16, padding: '2px 8px', borderRadius: 8, border: 'none', background: '#2563eb', color: '#fff', fontWeight: 500, cursor: 'pointer', height: 20, fontSize: 12, lineHeight: '20px' }}
             onClick={() => setActiveView('marketData')}
           >
-            Fetch<br />Market Data
+            Fetch Market Data
           </button>
         </div>
       </header>
@@ -759,25 +763,27 @@ const App = () => {
                 </>
               )}
             </div>
-            <div className="playback-panel">
-              <PlaybackControls
-                playbackIndex={playbackIndex}
-                maxIndex={useTickPlayback && tickSourceData
-                  ? Math.max(tickSourceData.length - 1, 0)
-                  : Math.max(candles.length - 1, 0)
-                }
-                isPlaying={isPlaying}
-                tickRate={tickRate}
-                tickSource={tickSource}
-                availableTickSources={availableTickSources}
-                onTogglePlay={handleTogglePlay}
-                onSeek={seek}
-                onStep={step}
-                onTickRateChange={setTickRate}
-                onTickSourceChange={handleTickSourceChange}
-                onJumpToCurrent={handleJumpToCurrent}
-              />
-              <div style={{ marginTop: 12 }}>
+            <div className="bottom-panel">
+              <div className="playback-area">
+                <PlaybackControls
+                  playbackIndex={playbackIndex}
+                  maxIndex={useTickPlayback && tickSourceData
+                    ? Math.max(tickSourceData.length - 1, 0)
+                    : Math.max(candles.length - 1, 0)
+                  }
+                  isPlaying={isPlaying}
+                  tickRate={tickRate}
+                  tickSource={tickSource}
+                  availableTickSources={availableTickSources}
+                  onTogglePlay={handleTogglePlay}
+                  onSeek={seek}
+                  onStep={step}
+                  onTickRateChange={setTickRate}
+                  onTickSourceChange={handleTickSourceChange}
+                  onJumpToCurrent={handleJumpToCurrent}
+                />
+              </div>
+              <div className="trading-area">
                 {/* Determine price precision from the display candles so the trading panel uses the same formatting */}
                 <TradingPanel
                   currentPrice={displayCandles[displayPlaybackIndex]?.close}

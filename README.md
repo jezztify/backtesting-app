@@ -1,6 +1,6 @@
-# Manual Backtesting Workspace
+# Backtesting Workspace
 
-Lightweight prototype for a manual backtesting workspace with a TradingView-like chart, drawing tools, and a tick playback system.
+Lightweight prototype for a Backtesting Workspace with a TradingView-like chart, drawing tools, and a tick playback system.
 
 > This project is for study and educational use only. The author does not hold liability for any damages, losses, or issues that may arise from use by other users.
 If you like this project, give it a star so others will discover it too.

@@ -841,7 +841,7 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
           so pointer events and drawing visuals only cover the chart plotting area. */}
       {(() => {
         const PRICE_AXIS_WIDTH = 60; // reserve space for right price axis
-        const TIME_AXIS_HEIGHT = 50; // reserve space for bottom time axis
+        const TIME_AXIS_HEIGHT = 24; // reserve space for bottom time axis (kept small to ensure x-axis remains visible)
         const canvasWidth = Math.max(0, dimensions.width - PRICE_AXIS_WIDTH);
         const canvasHeight = Math.max(0, dimensions.height - TIME_AXIS_HEIGHT);
         return (
@@ -853,6 +853,7 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
             renderTick={renderTick}
             aggregatedCandles={aggregatedCandlesMemo}
             panHandlers={panHandlers}
+            timeAxisHeight={TIME_AXIS_HEIGHT}
           />
         );
       })()}

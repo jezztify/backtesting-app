@@ -33,6 +33,10 @@ interface DrawingOverlayProps {
   pricePrecision: number;
   panHandlers?: PanHandlers;
   aggregatedCandles?: Candle[];
+  // Number of pixels reserved at the bottom for the chart time axis. When provided
+  // the overlay will not cover that area so the axis remains visible and
+  // interactive.
+  timeAxisHeight?: number;
 }
 
 type RectangleHandle = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'middle-left' | 'middle-right';
@@ -342,7 +346,7 @@ const snapToNearestCandleLow = (time: number, candles?: Candle[]): number | null
   return best ? best.low : null;
 };
 
-const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision, panHandlers, aggregatedCandles }: DrawingOverlayProps) => {
+const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision, panHandlers, aggregatedCandles, timeAxisHeight }: DrawingOverlayProps) => {
   const overlayRef = useRef<SVGSVGElement | null>(null);
   const [interaction, setInteraction] = useState<InteractionState>({ type: 'idle' });
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; drawingId: string } | null>(null);
@@ -1436,7 +1440,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
       onPointerLeave={handlePointerLeave}
       onClick={handleCanvasClick}
       onContextMenu={e => e.preventDefault()}
-      style={{ position: 'absolute', left: 0, top: 0, userSelect: 'none' }}
+      style={{ position: 'absolute', left: 0, top: 0, userSelect: 'none', bottom: timeAxisHeight ? `${timeAxisHeight}px` : undefined }}
     >
       <defs>
         <filter id="selection-shadow" x="-20%" y="-20%" width="140%" height="140%">
