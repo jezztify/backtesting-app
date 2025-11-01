@@ -62,7 +62,7 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
     const lotSize = useTradingStore((s) => (s as any).lotSize as number);
     const setLotSize = useTradingStore((s) => (s as any).setLotSize as (n: number) => void);
 
-    const [collapsed, setCollapsed] = useState<boolean>(false);
+    const [collapsed, setCollapsed] = useState<boolean>(true);
     const [showAccountOptions, setShowAccountOptions] = useState<boolean>(false);
     const [tempStartingBalance, setTempStartingBalance] = useState<number>(startingBalance);
     const [tempLeverage, setTempLeverage] = useState<number>(leverage || 1);
