@@ -4,6 +4,13 @@ Lightweight prototype for a Backtesting Workspace with a TradingView-like chart,
 
 > Educational / prototype software — use at your own risk. Contributions and issues are welcome.
 
+
+## Watch Video
+
+<a href="http://www.youtube.com/watch?feature=player_embedded&v=FaGGQwEOBlA" target="_blank">
+ <img src="https://img.youtube.com/vi/FaGGQwEOBlA/0.jpg" alt="Watch the video" width="720" height="480" border="10" />
+</a>
+
 ## Quick start
 
 1. Start the dev server (from repo root):
