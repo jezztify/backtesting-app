@@ -61,6 +61,53 @@ const App = () => {
   const [candlesRight, setCandlesRight] = useState<Candle[]>(candles);
   // Layout: 'single' or 'dual' charts
   const [layout, setLayout] = useState<'single' | 'dual'>('single');
+  // Percentage width allocated to the left chart in dual layout (10-90)
+  const [splitPercent, setSplitPercent] = useState<number>(50);
+  const chartWrapperRef = useRef<HTMLDivElement | null>(null);
+  const resizingRef = useRef<{ startX: number; startPercent: number } | null>(null);
+
+  const startChartResize = (clientX: number) => {
+    resizingRef.current = { startX: clientX, startPercent: splitPercent };
+    window.addEventListener('mousemove', onChartMouseMove);
+    window.addEventListener('mouseup', stopChartResize);
+    window.addEventListener('touchmove', onChartTouchMove as any, { passive: false });
+    window.addEventListener('touchend', stopChartResize as any);
+  };
+
+  const onChartMouseMove = (e: MouseEvent) => {
+    if (!resizingRef.current) return;
+    const delta = e.clientX - resizingRef.current.startX;
+    const container = chartWrapperRef.current;
+    if (!container) return;
+    const width = container.getBoundingClientRect().width || 1;
+    const deltaPercent = (delta / width) * 100;
+    let next = resizingRef.current.startPercent + deltaPercent;
+    next = Math.max(10, Math.min(90, next));
+    setSplitPercent(next);
+  };
+
+  const onChartTouchMove = (e: TouchEvent) => {
+    if (!resizingRef.current) return;
+    if (e.touches && e.touches[0]) {
+      const delta = e.touches[0].clientX - resizingRef.current.startX;
+      const container = chartWrapperRef.current;
+      if (!container) return;
+      const width = container.getBoundingClientRect().width || 1;
+      const deltaPercent = (delta / width) * 100;
+      let next = resizingRef.current.startPercent + deltaPercent;
+      next = Math.max(10, Math.min(90, next));
+      setSplitPercent(next);
+      e.preventDefault();
+    }
+  };
+
+  const stopChartResize = () => {
+    resizingRef.current = null;
+    window.removeEventListener('mousemove', onChartMouseMove);
+    window.removeEventListener('mouseup', stopChartResize);
+    window.removeEventListener('touchmove', onChartTouchMove as any);
+    window.removeEventListener('touchend', stopChartResize as any);
+  };
   const [isAggregating, setIsAggregating] = useState<boolean>(false);
   const [aggregationProgress, setAggregationProgress] = useState<number>(0);
   const [useTickPlayback, setUseTickPlayback] = useState<boolean>(true); // Enable tick-by-tick playback
@@ -702,7 +749,7 @@ const App = () => {
             onOpenCanvasSettings={() => setShowCanvasModal(true)}
           />
           <div className="chart-area" style={{ flex: 1, minWidth: 0 }}>
-            <div className="chart-wrapper" style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
+            <div ref={chartWrapperRef} className="chart-wrapper" style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
               {layout === 'single' ? (
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', marginBottom: 8 }}>
@@ -725,7 +772,7 @@ const App = () => {
                 // Dual layout: render two ChartContainers side-by-side that share the same
                 // drawing store and base tick data, but can use independent timeframes.
                 <>
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ flexBasis: `${splitPercent}%`, flexGrow: 0, flexShrink: 0, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', marginBottom: 8 }}>
                       <TimeframeSelector selectedTimeframe={timeframe} onTimeframeChange={onLeftTimeframeChange} disabled={isAggregating} />
                     </div>
@@ -742,7 +789,17 @@ const App = () => {
                       baseTimeframe={tickSource}
                     />
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  {/* vertical resizer */}
+                  <div
+                    className="chart-resizer"
+                    onMouseDown={(e) => { e.preventDefault(); startChartResize(e.clientX); }}
+                    onTouchStart={(e) => { startChartResize(e.touches[0].clientX); }}
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label="Resize charts"
+                  />
+
+                  <div style={{ flexBasis: `${100 - splitPercent}%`, flexGrow: 0, flexShrink: 0, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', marginBottom: 8 }}>
                       <TimeframeSelector selectedTimeframe={timeframeRight} onTimeframeChange={onRightTimeframeChange} disabled={isAggregating} />
                     </div>

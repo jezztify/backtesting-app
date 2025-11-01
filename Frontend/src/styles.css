@@ -436,6 +436,24 @@ header {
   width: 100%;
 }
 
+/* Vertical resizer between dual charts */
+.chart-resizer {
+  width: 10px;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+.chart-resizer::before {
+  content: '';
+  width: 2px;
+  height: 48px;
+  background: rgba(15, 23, 42, 0.12);
+  border-radius: 2px;
+}
+
 .playback-controls {
   display: grid;
   grid-template-columns: auto 1fr auto auto;
