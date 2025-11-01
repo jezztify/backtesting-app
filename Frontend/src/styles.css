@@ -724,9 +724,110 @@ button.ghost:hover {
   }
 }
 
-/* Dark mode: force specific trading panel labels/values to black */
-:root[data-theme='dark'] .bottom-panel .trading-area .trading-panel .trading-panel-title,
-:root[data-theme='dark'] .bottom-panel .trading-area .trading-panel .tp-label,
-:root[data-theme='dark'] .bottom-panel .trading-area .trading-panel .tp-value {
+/* Trading panel: centralized styles and theme overrides */
+.trading-panel {
+  border-radius: 8px;
+  background: var(--color-panel);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.trading-panel .trading-panel-title {
+  font-weight: 700;
+}
+
+.trading-panel .tp-label {
+  color: var(--color-text-muted);
+}
+
+.trading-panel .tp-value {
+  color: var(--color-text);
+}
+
+.trading-panel .tp-card {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.trading-panel .tp-btn {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-panel);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.trading-panel .tp-btn.danger {
+  border-color: rgba(239, 68, 68, 0.35);
+  color: var(--color-danger);
+}
+
+.trading-panel .tp-tab {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.trading-panel .tp-tab.active {
+  background: var(--color-panel);
+  border-color: var(--color-border-strong);
+  font-weight: 700;
+}
+
+.trading-panel .tp-small-btn {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.trading-panel .tp-small-btn.active {
+  background: var(--color-text);
+  color: var(--color-text-inverse);
+}
+
+.trading-panel .tp-pill {
+  display: inline-block;
+}
+
+.trading-panel .tp-pending {
+  color: #f59e0b;
+}
+
+.trading-panel .tp-active-green {
+  color: #10b981;
+}
+
+.trading-panel .tp-active-red {
+  color: #ef4444;
+}
+
+/* Ensure summary / positions / orders / history content boxes stay white in dark mode */
+.trading-panel--dark .tp-box {
+  background: #ffffff !important;
+  border-color: #e5e7eb !important;
   color: #000 !important;
+}
+
+/* default tp-box appearance (use CSS vars so themes can adapt) */
+.trading-panel .tp-box {
+  background: var(--color-panel);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  border-radius: 6px;
+}
+
+/* resizer handle inside trading panel */
+.trading-panel .tp-resizer {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-border);
 }

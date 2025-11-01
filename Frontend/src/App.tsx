@@ -192,17 +192,10 @@ const App = () => {
         const fallback = Math.max(candles.length - 1, 0);
         return Math.min(persisted.playbackIndex, fallback);
       });
-      // restore layout & split percent if present
-      if (persisted.layout) {
-        try {
-          setLayout(persisted.layout as any);
-        } catch (err) {
-          // ignore
-        }
-      }
-      if (typeof persisted.splitPercent === 'number') {
-        setSplitPercent(Math.max(10, Math.min(90, persisted.splitPercent)));
-      }
+      // Note: intentionally do NOT restore layout or splitPercent from persisted
+      // workspace state when loading a dataset. Restoring these would change the
+      // user's current layout when they load market data; keep the current
+      // layout settings instead (we still restore drawings and playback index).
     } else {
       loadSnapshot([]);
       setPlaybackIndex(Math.max(candles.length - 1, 0));
