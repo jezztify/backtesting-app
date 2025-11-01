@@ -418,7 +418,8 @@ header {
 
 .bottom-panel {
   display: flex;
-  flex-direction: column; /* stack rows: playback controls on top, trading panel below */
+  flex-direction: column;
+  /* stack rows: playback controls on top, trading panel below */
   align-items: stretch;
   gap: 0.5rem;
   padding: 0.4rem 0.6rem;

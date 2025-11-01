@@ -496,7 +496,7 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                                 {/* ENTRY orders (pending limit entries) */}
                                 <div style={{ marginBottom: 10 }}>
                                     <h5 style={{ margin: '6px 0' }}>ENTRY</h5>
-                                        {entryOrders.length === 0 ? (
+                                    {entryOrders.length === 0 ? (
                                         <div style={{ color: '#6b7280' }}>No pending entry orders</div>
                                     ) : (
                                         entryOrders.map((o) => (

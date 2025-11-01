@@ -2,26 +2,22 @@
 
 Lightweight prototype for a Backtesting Workspace with a TradingView-like chart, drawing tools, and a tick playback system.
 
-> This project is for study and educational use only. The author does not hold liability for any damages, losses, or issues that may arise from use by other users.
-If you like this project, give it a star so others will discover it too.
-
-[![Watch the video](https://img.youtube.com/vi/-SRq_xEaiFg/0.jpg)](https://www.youtube.com/watch?v=-SRq_xEaiFg)
-
+> Educational / prototype software — use at your own risk. Contributions and issues are welcome.
 
 ## Quick start
 
-1. Run runner script
+1. Start the dev server (from repo root):
 ```bash
 ./scripts/start-dev.sh
 ```
 
-2. Build for production
+2. Build for production:
 
 ```bash
 npm run build
 ```
 
-3. Run tests
+3. Run tests:
 
 ```bash
 npm test
@@ -29,87 +25,50 @@ npm test
 
 The Vite dev server runs on http://localhost:5173 by default.
 
-## At-a-glance features
+## At-a-glance features (current)
 
-- Interactive chart powered by `lightweight-charts` (React + TypeScript)
-- Multiple timeframes and aggregation: Tick, M1, M5, M15, H1, H4, Daily, Weekly (via `src/utils/timeframeAggregation.ts`) 
-- Tick playback system: play/pause, step forward/backward, adjustable tick rate, and live tick advancement (see `src/utils/tickPlayback.ts` and `Frontend/docs/tick-playback-system.md`)
-- Drawing tools: Rectangle, Trendline, and Long/Short Position tools with selection, move, duplicate, delete, undo/redo, and property editing (implemented in `src/components/DrawingOverlay.tsx` and `src/components/ToolSidebar.tsx`)
-- Trading panel / simulated positions: place and edit manual positions, position markers rendered on the chart (`src/components/TradingPanel.tsx` and `src/state/tradingStore.ts`)
-- Import Market Data & Data Loader: sample datasets included (see `src/data/`) and a Import Market Data panel for loading/inspecting data (`src/components/MarketDataPanel.tsx`, `src/components/DataLoader.tsx`)
-- Persistence: drawings and playback/chart state persist to `localStorage` via `src/services/persistence.ts`
-- Theme toggle (light/dark) via `src/components/ThemeToggle.tsx`
-- Properties panel and modal for editing drawing/chart properties (`src/components/PropertiesPanel.tsx`, `src/components/PropertiesPanelModal.tsx`)
-- Tool sidebar: quick access to tools, dataset label, timeframe display, and reset actions (`src/components/ToolSidebar.tsx`)
-- Utilities: CSV parsing, geometry helpers (clipping, line math), format helpers (`src/utils/csv.ts`, `src/utils/geometry.ts`, `src/utils/format.ts`)
- - Timeframe & timezone helpers: timezone-aware tick mark formatters and filename-based timeframe detection (`src/utils/timeframe.ts`) for improved axis labels across minute/hour/day views
- - Utilities: CSV parsing, geometry helpers (clipping, line math), format helpers (`src/utils/csv.ts`, `src/utils/geometry.ts`, `src/utils/format.ts`)
-- State management: lightweight global stores using `zustand` (`src/state/*`)
-- Tests: Vitest unit tests for core utilities and stores (see `Frontend/src/__tests__`)
+- Interactive chart powered by `lightweight-charts` (React + TypeScript).
+- Multi-layout support: single or dual chart view. In dual view you can independently choose timeframes for each chart and drag the vertical resizer to adjust their relative widths.
+- Multiple timeframes and aggregation: Tick, M1, M5, M15, H1, H4, Daily, Weekly (see `src/utils/timeframeAggregation.ts`).
+- Tick playback system: play/pause, step forward/backward, adjustable tick rate, tick-source selection and progressive aggregation (see `src/utils/tickPlayback.ts`).
+- Drawing tools: Select, Rectangle, Trendline, Fibonacci, Volume Profile, Position (Long/Short). Drawings are stored in a global drawing store and persist to workspace state.
+- Drawing persistence & defaults: last-used style for tools (for example Fibonacci levels and Volume Profile style) are persisted and used to seed new drawings.
+- Robust import: DataLoader accepts Twelve Data JSON, Dukascopy (including arrays-of-arrays format), and exported JSON files produced by the Import Market Data panel.
+- Drawing overlay sizing fix: the SVG overlay is sized to the chart canvas (does not cover chart axes) to avoid visual interference with axis labels and hit-testing.
+- Timeframe selectors: moved inside each chart canvas area (left/right) in dual layout for clearer context.
+- Compact header & control placement: header controls were compacted to fit a thin header and the Layout selector moved next to Load Market Data.
+- Bottom panel rework: playback controls and trading panel are separated but grouped inside a single `.bottom-panel` area (playback on top, trading panel below).
+- Trading panel: simulated account with starting balance, equity, realized & unrealized P&L; supports position placement and resizing of the panel area.
+- Tool icons: UI uses Material Symbols Outlined for several icons (e.g., trendline, Fibonacci, Volume Profile). If your environment needs the font, add the Google stylesheet to `index.html`.
+- State management: lightweight global stores using `zustand` (`src/state/*`).
+- Persistence: workspace (drawings, preferences) save/load via `src/services/persistence.ts` (localStorage-backed).
+- Tests: Vitest unit/smoke tests live under `Frontend/src/__tests__` and cover core utilities, aggregation logic and stores.
 
-## Using the Import Market Data panel (Twelve Data)
+## Importing Market Data
 
-The app includes a built-in Import Market Data panel (header button "Import Market Data") that can fetch time-series from Twelve Data directly and save the returned JSON for import. This is the recommended workflow (no curl or external downloads required):
+Use the Import Market Data panel to fetch Twelve Data time-series and save JSON for import. The `DataLoader` also recognizes Dukascopy JSON and several common local JSON shapes.
 
-1) Open Import Market Data
+- Recommended: use the Import Market Data panel to fetch and save provider JSON, then import via the Load Market Data control.
+- Dukascopy: arrays-of-arrays and object formats are supported. Very large Dukascopy files may be heavy for unit tests or the browser; consider chunking or server-side preprocessing for huge ranges.
 
-- In the app header click the "Import Market Data" button to open the Import Market Data panel.
+## UI overview (file pointers)
 
-2) Save your Twelve Data API key
-
-- Select the provider (Twelve Data) and paste your API key into the API Key field, then click "Save". The panel stores the key in `localStorage` so you don't need to re-enter it every session.
-
-3) Configure a fetch
-
-- Enter the symbol (e.g., `EUR/USD`), choose the source interval (e.g., `1min`) and optionally an aggregate interval (if you want the panel to pre-aggregate the data for you).
-- Set the start and end dates (YYYY-MM-DD). For long ranges, enable "Download in 5-day chunks" to avoid hitting rate limits.
-
-4) Fetch and save
-
-- Click "Fetch Data". The panel will call Twelve Data (chunked when requested), display a preview, and enable a "Save Data" button.
-- Click "Save Data" to download the JSON file to your machine. The filename is auto-generated (e.g., `EURUSD_1min_20251001_20251010.json`).
-
-5) Import into the workspace
-
-- Use the `Load Market Data` control in the header (the same button used for file uploads) to import the saved JSON. `DataLoader` recognises Twelve Data JSON (it looks for `values` and `meta.interval`) and will convert the records into the app's candle format and set an appropriate timeframe.
-
-Notes and tips
-
-- The Import Market Data panel handles rate limits by default (it will chunk requests in 5-day windows and throttle requests to avoid hitting Twelve Data limits).
-- Saved API keys are stored in `localStorage` under `marketDataApiKeys` (provider keyed).
-- The panel can optionally aggregate data to a larger interval before saving; this is useful if you want M15 or H1 candles built server-side and saved as JSON.
-- If you prefer to keep fetched JSON inside the repo for development, save the downloaded file to `Frontend/src/data/` and open it via `Load Market Data` or by referencing it from the app (the app's sample loader can load files under `src/data/`).
-
-## Import Market Data providers
-
-This workspace includes first-class support for several common market-data sources and local JSON files. The app will attempt to detect the file format and timeframe automatically when importing saved JSON.
-
-- Twelve Data (recommended): built-in fetcher via the Import Market Data panel. Supports chunked downloads, interval selection, and saving JSON for later import. The panel stores API keys in `localStorage` and will throttle/chunk requests to avoid rate limits.
-- Dukascopy: supported by importing saved Dukascopy JSON (or using the provided `parse-dukascopy-json.js` script). Put saved files under `Frontend/src/data/` or import via the app.
-- Local JSON files: any JSON exported by the Import Market Data panel or converted with the repo scripts can be placed in `Frontend/src/data/` and imported directly. The DataLoader looks for common fields (`values`, `meta.interval`, or timestamp+OHLC arrays) and will try to map them into the app's candle format.
-
-Filename & timeframe tips
-
-- Filenames like `EURUSD_1min_20251001_20251010.json`, `EURUSD_M5_20251001_20251010.json`, or `EURUSD_H1_20251001_20251010.json` are recognized by the automatic timeframe detector (`src/utils/timeframe.ts`). The detector also understands variations such as `m1`, `1min`, `1h`, `daily`, `weekly`, and `monthly`.
-- If the app cannot detect a timeframe automatically, use the Import Market Data panel to specify the source interval when importing.
-- For long date ranges use the panel's chunking (5-day windows) to avoid provider rate limits when fetching from Twelve Data.
-
-## UI overview
-
-- Chart area (`src/components/ChartContainer.tsx`) — the main price/time series display and axis
-- Drawing overlay (`src/components/DrawingOverlay.tsx`) — SVG overlay for drawings and interactions
-- Tool sidebar (`src/components/ToolSidebar.tsx`) — select tools, view dataset/timeframe, quick actions
-- Playback controls (`src/components/PlaybackControls.tsx`) — play/pause, step, rate control
-- Market data panel & loader (`src/components/MarketDataPanel.tsx`, `src/components/DataLoader.tsx`)
-- Properties panel & modal (`src/components/PropertiesPanel.tsx`, `src/components/PropertiesPanelModal.tsx`)
-- Theme toggle (`src/components/ThemeToggle.tsx`)
-- Trading panel (`src/components/TradingPanel.tsx`) — place/edit simulated trades
+- Chart area: `Frontend/src/components/ChartContainer.tsx` — main chart + converters.
+- Drawing overlay: `Frontend/src/components/DrawingOverlay.tsx` — SVG overlay sized to canvas.
+- Tool sidebar: `Frontend/src/components/ToolSidebar.tsx` — tools and icons.
+- Playback controls: `Frontend/src/components/PlaybackControls.tsx` — play/pause/seek UI.
+- Market data import & loader: `Frontend/src/components/MarketDataPanel.tsx`, `Frontend/src/components/DataLoader.tsx`.
+- Trading panel: `Frontend/src/components/TradingPanel.tsx` and store `Frontend/src/state/tradingStore.ts`.
+- Persistence: `Frontend/src/services/persistence.ts`.
+- Utilities: CSV parsing, geometry and timeframe helpers in `Frontend/src/utils/`.
 
 ## Keyboard shortcuts
 
 - V — Select tool
 - R — Rectangle tool
 - T — Trendline tool
+- F — Fibonacci tool
+- P — Volume Profile tool
 - Space — Play / Pause playback
 - ← / → — Step backward / forward one tick
 - Delete / Backspace — Delete selected drawing
@@ -117,43 +76,20 @@ Filename & timeframe tips
 - Cmd/Ctrl + Z — Undo
 - Cmd/Ctrl + Shift + Z — Redo
 
-## Project structure (important files)
-
-- `Frontend/src/` — application source
-	- `components/` — React UI components (chart, overlay, controls, panels)
-	- `data/` — sample datasets (JSON) and `sampleData.ts`
-	- `state/` — `zustand` stores: `canvasStore.ts`, `drawingStore.ts`, `tradingStore.ts`
-	- `services/` — persistence (`persistence.ts`)
-	- `utils/` — helpers: `csv.ts`, `geometry.ts`, `tickPlayback.ts`, `timeframe.ts`, `timeframeAggregation.ts`
-	- `__tests__/` — unit tests (Vitest)
-
-## Documentation
-
-Detailed design notes and feature docs live in `Frontend/docs/`:
-
-- `manual-backtesting-plan.md` — high-level plan and goals
-- `position-tool-guide.md` — behavior and UI of the position tool
-- `tick-playback-system.md` — tick playback design and controls
-- `timeframe-feature.md` — how timeframes & aggregation work
-
-## Testing & quality
-
-- Unit tests: `npm test` runs Vitest. Core utilities and stores are covered (timeframe aggregation, tick playback, geometry clipping, CSV conversion, trading store behaviors).
- - Unit tests: `npm test` runs Vitest. Core utilities and stores are covered (timeframe aggregation, tick playback, geometry clipping, CSV conversion, trading store behaviors). Recent test additions include timeframe parsing and tick playback edge-case coverage.
-- Linting & formatting: ESLint + Prettier configured in the repo (see `package.json` devDependencies).
-
 ## Notes, limitations & next steps
 
-- Prototype status: this repo is a research/education prototype, not production-ready. It favors clarity over absolute performance. For large numbers of drawings or extremely high-frequency tick playback, consider switching the overlay to a canvas rendering strategy.
-- Timezone handling and dataset selection are intentionally minimal (sample data in-repo). A dataset picker and server-side data source could be added.
-- Persistence uses `localStorage`. For multi-device sync or multi-user work, add a backend persistence layer.
+- Prototype: this is a research / educational prototype. It prioritizes clarity and features over production optimizations.
+- Very large datasets: loading extremely large tick datasets can stress the browser and test runner (consider server-side aggregation or streaming parsing for production workloads).
+- Visual polish: header compacting and compact mode may need minor style tweaks for some controls — feel free to file issues or PRs for UX refinements.
+- Improvements to consider: persist chart split percentage, add double-click-to-reset resizer, provide worker-based parsing for huge files, and more granular responsive layouts for the bottom panel.
 
 ## Contributing
 
-Contributions welcome — open issues or PRs. Keep changes small and focused. Add or update tests for any new behaviors.
+Contributions welcome — open issues or PRs. Please include tests for new logic and keep changes focused.
 
 ## License
 
-See `LICENSE` for the license used by the frontend scaffolding.
+See `LICENSE` in the repository root.
 
 ---
+- For long date ranges use the panel's chunking (5-day windows) to avoid provider rate limits when fetching from Twelve Data.

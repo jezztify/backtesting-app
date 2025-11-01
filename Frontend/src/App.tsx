@@ -192,6 +192,17 @@ const App = () => {
         const fallback = Math.max(candles.length - 1, 0);
         return Math.min(persisted.playbackIndex, fallback);
       });
+      // restore layout & split percent if present
+      if (persisted.layout) {
+        try {
+          setLayout(persisted.layout as any);
+        } catch (err) {
+          // ignore
+        }
+      }
+      if (typeof persisted.splitPercent === 'number') {
+        setSplitPercent(Math.max(10, Math.min(90, persisted.splitPercent)));
+      }
     } else {
       loadSnapshot([]);
       setPlaybackIndex(Math.max(candles.length - 1, 0));
@@ -215,12 +226,16 @@ const App = () => {
         drawings,
         playbackIndex,
         lastFibonacciLevels,
+        layout,
+        splitPercent,
       });
     } catch (err) {
       // fallback: still save drawings/playbackIndex
       saveWorkspaceState(datasetId, {
         drawings,
         playbackIndex,
+        layout,
+        splitPercent,
       });
     }
   }, [datasetId, drawings, playbackIndex]);
