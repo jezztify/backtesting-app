@@ -751,28 +751,44 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
         const y = seriesRef.current.priceToCoordinate(point.price);
 
         // If timeToCoordinate returns null, the time is outside the currently loaded data range
-        // We need to extrapolate the coordinate based on stable reference points
+        // We need to extrapolate the coordinate. Prefer using the chart's current visible
+        // logical range as reference (more reliable when switching timeframes), falling
+        // back to the full dataset edges if necessary.
         if (x === null || x === undefined) {
-          // Use the first and last candles of the FULL dataset as stable reference points
-          const firstCandleTime = normalizeTime(candlesRef[0].time as Time);
-          const lastCandleTime = normalizeTime(candlesRef[candlesRef.length - 1].time as Time);
-
-          if (firstCandleTime !== null && lastCandleTime !== null) {
-            // Get coordinates for these reference points
-            const x1 = timeScale.timeToCoordinate(candlesRef[0].time as Time);
-            const x2 = timeScale.timeToCoordinate(candlesRef[candlesRef.length - 1].time as Time);
-
-            if (x1 !== null && x2 !== null) {
-              // Calculate pixels per unit of time based on these stable reference points
-              const timeRange = lastCandleTime - firstCandleTime;
+          // Prefer visible range of the chart as stable reference points
+          const visibleRange = timeScale.getVisibleRange?.();
+          if (visibleRange && visibleRange.from !== undefined && visibleRange.to !== undefined) {
+            const vrFrom = visibleRange.from as Time;
+            const vrTo = visibleRange.to as Time;
+            const x1 = timeScale.timeToCoordinate(vrFrom);
+            const x2 = timeScale.timeToCoordinate(vrTo);
+            const firstTime = normalizeTime(vrFrom);
+            const lastTime = normalizeTime(vrTo);
+            if (x1 !== null && x2 !== null && firstTime !== null && lastTime !== null && lastTime > firstTime) {
+              const timeRange = lastTime - firstTime;
               const pixelRange = x2 - x1;
+              const pixelsPerTimeUnit = pixelRange / timeRange;
+              const timeFromFirst = point.time - firstTime;
+              x = (x1 + timeFromFirst * pixelsPerTimeUnit) as any;
+            }
+          }
 
-              if (timeRange > 0) {
-                const pixelsPerTimeUnit = pixelRange / timeRange;
+          // Fallback: use full dataset edges if visible range was not usable
+          if (x === null || x === undefined) {
+            const firstCandleTime = normalizeTime(candlesRef[0].time as Time);
+            const lastCandleTime = normalizeTime(candlesRef[candlesRef.length - 1].time as Time);
 
-                // Extrapolate from the first candle
-                const timeFromFirst = point.time - firstCandleTime;
-                x = (x1 + timeFromFirst * pixelsPerTimeUnit) as any;
+            if (firstCandleTime !== null && lastCandleTime !== null) {
+              const x1 = timeScale.timeToCoordinate(candlesRef[0].time as Time);
+              const x2 = timeScale.timeToCoordinate(candlesRef[candlesRef.length - 1].time as Time);
+              if (x1 !== null && x2 !== null) {
+                const timeRange = lastCandleTime - firstCandleTime;
+                const pixelRange = x2 - x1;
+                if (timeRange > 0) {
+                  const pixelsPerTimeUnit = pixelRange / timeRange;
+                  const timeFromFirst = point.time - firstCandleTime;
+                  x = (x1 + timeFromFirst * pixelsPerTimeUnit) as any;
+                }
               }
             }
           }
@@ -821,15 +837,26 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
         setContextMenu({ x: e.clientX, y: e.clientY });
       }}
     >
-      <DrawingOverlay
-        width={dimensions.width}
-        height={dimensions.height}
-        converters={converters}
-        pricePrecision={priceFormat.precision}
-        renderTick={renderTick}
-        aggregatedCandles={aggregatedCandlesMemo}
-        panHandlers={panHandlers}
-      />
+      {/* Pass the drawing overlay the actual canvas area (exclude price axis and time axis)
+          so pointer events and drawing visuals only cover the chart plotting area. */}
+      {(() => {
+        const PRICE_AXIS_WIDTH = 60; // reserve space for right price axis
+        const TIME_AXIS_HEIGHT = 24; // reserve space for bottom time axis (kept small to ensure x-axis remains visible)
+        const canvasWidth = Math.max(0, dimensions.width - PRICE_AXIS_WIDTH);
+        const canvasHeight = Math.max(0, dimensions.height - TIME_AXIS_HEIGHT);
+        return (
+          <DrawingOverlay
+            width={canvasWidth}
+            height={canvasHeight}
+            converters={converters}
+            pricePrecision={priceFormat.precision}
+            renderTick={renderTick}
+            aggregatedCandles={aggregatedCandlesMemo}
+            panHandlers={panHandlers}
+            timeAxisHeight={TIME_AXIS_HEIGHT}
+          />
+        );
+      })()}
 
       {(baseTicks.length === 0 || candles.length === 0) && (
         <div
@@ -940,4 +967,70 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
   );
 };
 
+// Converters extracted for unit testing: pure functions that mirror the runtime
+// behavior of the internal converters used inside the component.
+export const toCanvasPoint = (
+  point: { time: any; price: number },
+  chart: any,
+  series: any,
+  candlesRef: any[]
+): { x: number; y: number } | null => {
+  if (!chart || !series || !Array.isArray(candlesRef) || candlesRef.length === 0) {
+    return null;
+  }
+
+  const timeScale = chart.timeScale();
+  let x = timeScale.timeToCoordinate(point.time as Time);
+  const y = series.priceToCoordinate(point.price);
+
+  // Extrapolate if necessary when timeToCoordinate returns null/undefined
+  if (x === null || x === undefined) {
+    const firstCandleTime = normalizeTime(candlesRef[0].time as Time);
+    const lastCandleTime = normalizeTime(candlesRef[candlesRef.length - 1].time as Time);
+
+    if (firstCandleTime !== null && lastCandleTime !== null) {
+      const x1 = timeScale.timeToCoordinate(candlesRef[0].time as Time);
+      const x2 = timeScale.timeToCoordinate(candlesRef[candlesRef.length - 1].time as Time);
+
+      if (x1 !== null && x2 !== null) {
+        const timeRange = lastCandleTime - firstCandleTime;
+        const pixelRange = x2 - x1;
+
+        if (timeRange > 0) {
+          const pixelsPerTimeUnit = pixelRange / timeRange;
+          const timeFromFirst = point.time - firstCandleTime;
+          x = (x1 + timeFromFirst * pixelsPerTimeUnit) as any;
+        }
+      }
+    }
+  }
+
+  if (x === undefined || y === undefined || x === null || y === null) {
+    return null;
+  }
+
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return null;
+  }
+
+  return { x, y };
+};
+
+export const toChartPoint = (canvasPoint: { x: number; y: number }, chart: any, series: any): { time: number; price: number } | null => {
+  if (!chart || !series) {
+    return null;
+  }
+  const time = chart.timeScale().coordinateToTime(canvasPoint.x);
+  const price = series.coordinateToPrice(canvasPoint.y);
+  if (price === null || price === undefined) {
+    return null;
+  }
+  const normalizedTime = normalizeTime(time);
+  if (normalizedTime === null) {
+    return null;
+  }
+  return { time: normalizedTime, price };
+};
+
+export { normalizeTime, offsetTimeByBars, normalizeVisibleData, getChartThemeColors, readCssVariable, createChartInstance, applyThemeToChart };
 export default ChartContainer;

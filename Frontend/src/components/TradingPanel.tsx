@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTradingStore } from '../state/tradingStore';
 import { formatPrice } from '../utils/format';
+import { useTheme } from '../hooks/useTheme';
 // Recharts for interactive charts
 import {
     ResponsiveContainer,
@@ -26,23 +27,19 @@ interface Props {
 
 const format = (n: number, precision: number = 2) => formatPrice(n, precision);
 
-const Tab: React.FC<{ label: string; active: boolean; onClick: () => void }> = ({ label, active, onClick }) => (
-    <button
-        onClick={onClick}
-        style={{
-            padding: '6px 12px',
-            borderRadius: 8,
-            border: active ? '1px solid #111827' : '1px solid transparent',
-            background: active ? '#fff' : 'transparent',
-            cursor: 'pointer',
-            fontWeight: active ? 700 : 500,
-        }}
-    >
-        {label}
-    </button>
-);
+const Tab: React.FC<{ label: string; active: boolean; onClick: () => void }> = ({ label, active, onClick }) => {
+    return (
+        <button
+            onClick={onClick}
+            className={`tp-tab ${active ? 'active' : ''}`}
+        >
+            {label}
+        </button>
+    );
+};
 
 const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => {
+    const { effectiveTheme } = useTheme();
     const startingBalance = useTradingStore((s) => s.startingBalance);
     const balance = useTradingStore((s) => s.balance);
     const equity = useTradingStore((s) => s.equity);
@@ -62,7 +59,7 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
     const lotSize = useTradingStore((s) => (s as any).lotSize as number);
     const setLotSize = useTradingStore((s) => (s as any).setLotSize as (n: number) => void);
 
-    const [collapsed, setCollapsed] = useState<boolean>(false);
+    const [collapsed, setCollapsed] = useState<boolean>(true);
     const [showAccountOptions, setShowAccountOptions] = useState<boolean>(false);
     const [tempStartingBalance, setTempStartingBalance] = useState<number>(startingBalance);
     const [tempLeverage, setTempLeverage] = useState<number>(leverage || 1);
@@ -224,30 +221,30 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
     const [chartType, setChartType] = useState<'equity' | 'pnl' | 'drawdown' | 'winloss'>('equity');
 
     return (
-        <div style={{ borderRadius: 8, background: '#fafafa', border: '1px solid #e5e7eb' }}>
+        <div className={`trading-panel ${effectiveTheme === 'dark' ? 'trading-panel--dark' : ''}`}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 10, cursor: 'pointer' }} onClick={() => setCollapsed((c) => !c)}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <strong>Trading Panel</strong>
+                    <strong className="trading-panel-title">Trading Panel</strong>
                 </div>
 
                 {/* center compact summary when collapsed */}
                 {collapsed && (
                     <div style={{ display: 'flex', gap: 14, alignItems: 'center', justifyContent: 'center', flex: 1 }}>
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: 11, color: '#6b7280' }}>Start</div>
-                            <div style={{ fontWeight: 700, fontSize: 12 }}>${format(startingBalance)}</div>
+                            <div className="tp-label" style={{ fontSize: 11 }}>Start</div>
+                            <div className="tp-value" style={{ fontWeight: 700, fontSize: 12 }}>${format(startingBalance)}</div>
                         </div>
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: 11, color: '#6b7280' }}>Equity</div>
-                            <div style={{ fontWeight: 700, fontSize: 12 }}>${format(equity)}</div>
+                            <div className="tp-label" style={{ fontSize: 11 }}>Equity</div>
+                            <div className="tp-value" style={{ fontWeight: 700, fontSize: 12 }}>${format(equity)}</div>
                         </div>
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: 11, color: '#6b7280' }}>Realized</div>
-                            <div style={{ fontWeight: 700, fontSize: 12 }}>${format(realizedPnl)}</div>
+                            <div className="tp-label" style={{ fontSize: 11 }}>Realized</div>
+                            <div className="tp-value" style={{ fontWeight: 700, fontSize: 12 }}>${format(realizedPnl)}</div>
                         </div>
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: 11, color: '#6b7280' }}>Unrealized</div>
-                            <div style={{ fontWeight: 700, fontSize: 12 }}>${format(unrealizedPnl)}</div>
+                            <div className="tp-label" style={{ fontSize: 11 }}>Unrealized</div>
+                            <div className="tp-value" style={{ fontWeight: 700, fontSize: 12 }}>${format(unrealizedPnl)}</div>
                         </div>
                     </div>
                 )}
@@ -259,7 +256,7 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                             setShowAccountOptions((s) => !s);
                         }}
                         title="Account options"
-                        style={{ padding: '6px 8px', borderRadius: 6, background: '#fff', border: '1px solid #d1d5db', color: '#111827', cursor: 'pointer' }}
+                        className="tp-btn"
                     >
                         Account Options
                     </button>
@@ -275,11 +272,11 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                             }
                         }}
                         title="Reset account (clears positions, history and account state)"
-                        style={{ padding: '6px 8px', borderRadius: 6, background: '#fff', border: '1px solid #ef4444', color: '#ef4444', cursor: 'pointer' }}
+                        className="tp-btn danger"
                     >
                         Reset Account
                     </button>
-                    <div style={{ fontSize: 12, color: '#374151' }}>{collapsed ? '▲' : '▼'}</div>
+                    <div style={{ fontSize: 12 }}>{collapsed ? '▲' : '▼'}</div>
                 </div>
             </div>
 
@@ -288,30 +285,30 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
 
                     <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
                         <div style={{ flex: 1 }}>
-                            <label style={{ fontSize: 12 }}>Starting</label>
-                            <div style={{ fontWeight: 700 }}>${format(startingBalance, pricePrecision)}</div>
+                            <label className="tp-label" style={{ fontSize: 12 }}>Starting</label>
+                            <div className="tp-value" style={{ fontWeight: 700 }}>${format(startingBalance, pricePrecision)}</div>
                         </div>
                         <div style={{ flex: 1 }}>
-                            <label style={{ fontSize: 12 }}>Equity</label>
-                            <div style={{ fontWeight: 700 }}>${format(equity, pricePrecision)}</div>
+                            <label className="tp-label" style={{ fontSize: 12 }}>Equity</label>
+                            <div className="tp-value" style={{ fontWeight: 700 }}>${format(equity, pricePrecision)}</div>
                         </div>
                         <div style={{ flex: 1 }}>
-                            <label style={{ fontSize: 12 }}>Realized P&L</label>
-                            <div style={{ fontWeight: 700 }}>${format(realizedPnl, pricePrecision)}</div>
+                            <label className="tp-label" style={{ fontSize: 12 }}>Realized P&L</label>
+                            <div className="tp-value" style={{ fontWeight: 700 }}>${format(realizedPnl, pricePrecision)}</div>
                         </div>
                         <div style={{ flex: 1 }}>
-                            <label style={{ fontSize: 12 }}>Unrealized P&L</label>
-                            <div style={{ fontWeight: 700 }}>${format(unrealizedPnl, pricePrecision)}</div>
+                            <label className="tp-label" style={{ fontSize: 12 }}>Unrealized P&L</label>
+                            <div className="tp-value" style={{ fontWeight: 700 }}>${format(unrealizedPnl, pricePrecision)}</div>
                         </div>
                     </div>
 
                     {/* Long/Short buttons removed per request */}
 
                     {showAccountOptions && (
-                        <div style={{ marginBottom: 12, background: '#fff', padding: 10, borderRadius: 8, border: '1px solid #e5e7eb' }} onClick={(e) => e.stopPropagation()}>
+                        <div className="tp-card" style={{ marginBottom: 12, padding: 10 }} onClick={(e) => e.stopPropagation()}>
                             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
                                 <div style={{ flex: 1 }}>
-                                    <label style={{ fontSize: 12, color: '#6b7280' }}>Starting Balance</label>
+                                    <label style={{ fontSize: 12 }}>Starting Balance</label>
                                     <input
                                         type="number"
                                         value={tempStartingBalance}
@@ -320,7 +317,7 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                                     />
                                 </div>
                                 <div style={{ width: 140 }}>
-                                    <label style={{ fontSize: 12, color: '#6b7280' }}>Leverage</label>
+                                    <label style={{ fontSize: 12 }}>Leverage</label>
                                     <input
                                         type="number"
                                         min={1}
@@ -331,7 +328,7 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                                     />
                                 </div>
                                 <div style={{ width: 160 }}>
-                                    <label style={{ fontSize: 12, color: '#6b7280' }}>Standard Lot Size (units)</label>
+                                    <label style={{ fontSize: 12 }}>Standard Lot Size (units)</label>
                                     <input
                                         type="number"
                                         min={1}
@@ -356,7 +353,8 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                                         setLotSize(Math.max(1, Math.round(tempLotSize)));
                                         setShowAccountOptions(false);
                                     }}
-                                    style={{ padding: '6px 10px', borderRadius: 6, background: '#111827', color: '#fff', border: 'none', cursor: 'pointer' }}
+                                    className="tp-btn"
+                                    style={{ padding: '6px 10px', borderRadius: 6, border: 'none' }}
                                 >
                                     Save
                                 </button>
@@ -369,7 +367,8 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                                         setTempLotSize(lotSize || 100000);
                                         setShowAccountOptions(false);
                                     }}
-                                    style={{ padding: '6px 10px', borderRadius: 6, background: 'transparent', color: '#111827', border: '1px solid #e5e7eb', cursor: 'pointer' }}
+                                    className="tp-btn"
+                                    style={{ padding: '6px 10px', borderRadius: 6, background: 'transparent', border: '1px solid var(--color-border)', cursor: 'pointer' }}
                                 >
                                     Cancel
                                 </button>
@@ -410,15 +409,15 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
                                             <label style={{ fontSize: 12, marginRight: 8 }}>Chart</label>
                                             <div style={{ display: 'flex', gap: 6 }}>
-                                                <button onClick={() => setChartType('equity')} style={{ padding: '4px 8px', borderRadius: 6, background: chartType === 'equity' ? '#111827' : 'transparent', color: chartType === 'equity' ? '#fff' : undefined }}>Equity</button>
-                                                <button onClick={() => setChartType('pnl')} style={{ padding: '4px 8px', borderRadius: 6, background: chartType === 'pnl' ? '#111827' : 'transparent', color: chartType === 'pnl' ? '#fff' : undefined }}>P&amp;L</button>
-                                                <button onClick={() => setChartType('drawdown')} style={{ padding: '4px 8px', borderRadius: 6, background: chartType === 'drawdown' ? '#111827' : 'transparent', color: chartType === 'drawdown' ? '#fff' : undefined }}>Drawdown</button>
-                                                <button onClick={() => setChartType('winloss')} style={{ padding: '4px 8px', borderRadius: 6, background: chartType === 'winloss' ? '#111827' : 'transparent', color: chartType === 'winloss' ? '#fff' : undefined }}>Win/Loss</button>
+                                                <button onClick={() => setChartType('equity')} className={`tp-small-btn ${chartType === 'equity' ? 'active' : ''}`}>Equity</button>
+                                                <button onClick={() => setChartType('pnl')} className={`tp-small-btn ${chartType === 'pnl' ? 'active' : ''}`}>P&amp;L</button>
+                                                <button onClick={() => setChartType('drawdown')} className={`tp-small-btn ${chartType === 'drawdown' ? 'active' : ''}`}>Drawdown</button>
+                                                <button onClick={() => setChartType('winloss')} className={`tp-small-btn ${chartType === 'winloss' ? 'active' : ''}`}>Win/Loss</button>
                                             </div>
                                         </div>
 
                                         <label style={{ fontSize: 12 }}>{chartType === 'equity' ? 'Equity Curve' : chartType === 'pnl' ? 'Cumulative P&L' : chartType === 'drawdown' ? 'Drawdown (%)' : 'Win / Loss'}</label>
-                                        <div style={{ marginTop: 6, background: '#fff', padding: 8, borderRadius: 6, border: '1px solid #e5e7eb' }}>
+                                        <div className="tp-box" style={{ marginTop: 6, padding: 8, borderRadius: 6 }}>
                                             {/* Chart rendering */}
                                             {chartType === 'equity' && <Sparkline points={summary.equityPoints.map((p) => p.equity)} />}
                                             {chartType === 'pnl' && (
@@ -432,41 +431,41 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
 
                                     <div style={{ width: 220, display: 'flex', flexDirection: 'column', gap: 6 }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                            <div style={{ color: '#6b7280', fontSize: 12 }}>Trades</div>
+                                            <div className="tp-label" style={{ fontSize: 12 }}>Trades</div>
                                             <div style={{ fontWeight: 700 }}>{summary.totalTrades}</div>
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                            <div style={{ color: '#6b7280', fontSize: 12 }}>Win / Loss</div>
+                                            <div className="tp-label" style={{ fontSize: 12 }}>Win / Loss</div>
                                             <div style={{ fontWeight: 700 }}>{summary.wins} / {summary.losses}</div>
 
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                            <div style={{ color: '#6b7280', fontSize: 12 }}>Profitability</div>
+                                            <div className="tp-label" style={{ fontSize: 12 }}>Profitability</div>
                                             <div style={{ fontWeight: 700 }}>{Number.isFinite(summary.profitability) ? `${summary.profitability.toFixed(1)}%` : '—'}</div>
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                            <div style={{ color: '#6b7280', fontSize: 12 }}>Sharpe (per-trade)</div>
+                                            <div className="tp-label" style={{ fontSize: 12 }}>Sharpe (per-trade)</div>
                                             <div style={{ fontWeight: 700 }}>{Number.isFinite(summary.sharpe) ? summary.sharpe === Infinity ? '∞' : summary.sharpe.toFixed(2) : '—'}</div>
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                            <div style={{ color: '#6b7280', fontSize: 12 }}>Total P&L</div>
+                                            <div className="tp-label" style={{ fontSize: 12 }}>Total P&L</div>
                                             <div style={{ fontWeight: 700 }}>${format(summary.totalPnL, pricePrecision)}</div>
                                         </div>
                                     </div>
                                 </div>
-                                <div style={{ color: '#6b7280', fontSize: 12 }}>Summary metrics above are calculated from closed trades in History.</div>
+                                <div className="tp-label" style={{ fontSize: 12 }}>Summary metrics above are calculated from closed trades in History.</div>
                             </div>
                         )}
 
                         {activeTab === 'positions' && (
                             <div>
                                 <h4 style={{ margin: '8px 0' }}>Open Positions</h4>
-                                {positions.length === 0 && <div style={{ color: '#6b7280' }}>No open positions</div>}
+                                {positions.length === 0 && <div className="tp-label">No open positions</div>}
                                 {positions.map((p) => (
-                                    <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: 8, borderRadius: 6, background: '#fff', marginBottom: 6, border: '1px solid #e5e7eb' }}>
+                                    <div key={p.id} className="tp-box" style={{ display: 'flex', justifyContent: 'space-between', padding: 8, borderRadius: 6, marginBottom: 6 }}>
                                         <div>
-                                            <div style={{ fontWeight: 700 }}>{p.side.toUpperCase()} {formatLot(p.size, lotSize)} {p.status === 'pending' ? <span style={{ fontSize: 12, color: '#f59e0b', marginLeft: 8 }}>PENDING</span> : null}</div>
-                                            <div style={{ fontSize: 12, color: '#6b7280' }}>
+                                            <div style={{ fontWeight: 700 }}>{p.side.toUpperCase()} {formatLot(p.size, lotSize)} {p.status === 'pending' ? <span className="tp-pill tp-pending" style={{ fontSize: 12, marginLeft: 8 }}>PENDING</span> : null}</div>
+                                            <div className="tp-label" style={{ fontSize: 12 }}>
                                                 <div>Entry: {format(p.entryPrice, pricePrecision)}</div>
                                                 {p.takeProfit !== undefined && (
                                                     <div>TP: {format(p.takeProfit, pricePrecision)}</div>
@@ -496,19 +495,19 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                                 {/* ENTRY orders (pending limit entries) */}
                                 <div style={{ marginBottom: 10 }}>
                                     <h5 style={{ margin: '6px 0' }}>ENTRY</h5>
-                                        {entryOrders.length === 0 ? (
-                                        <div style={{ color: '#6b7280' }}>No pending entry orders</div>
+                                    {entryOrders.length === 0 ? (
+                                        <div className="tp-label">No pending entry orders</div>
                                     ) : (
                                         entryOrders.map((o) => (
-                                            <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', padding: 8, borderRadius: 6, background: '#fff', marginBottom: 6, border: '1px solid #e5e7eb' }}>
+                                            <div key={o.id} className="tp-box" style={{ display: 'flex', justifyContent: 'space-between', padding: 8, borderRadius: 6, marginBottom: 6 }}>
                                                 <div>
                                                     <div style={{ fontWeight: 700 }}>{o.side.toUpperCase()} {formatLot(o.size, lotSize)}</div>
-                                                    <div style={{ fontSize: 12, color: '#6b7280' }}>Entry: {format(o.entryPrice, pricePrecision)}</div>
-                                                    {o.takeProfit !== undefined && <div style={{ fontSize: 12, color: '#6b7280' }}>TP: {format(o.takeProfit, pricePrecision)}</div>}
-                                                    {o.stopLoss !== undefined && <div style={{ fontSize: 12, color: '#6b7280' }}>SL: {format(o.stopLoss, pricePrecision)}</div>}
+                                                    <div className="tp-label" style={{ fontSize: 12 }}>Entry: {format(o.entryPrice, pricePrecision)}</div>
+                                                    {o.takeProfit !== undefined && <div className="tp-label" style={{ fontSize: 12 }}>TP: {format(o.takeProfit, pricePrecision)}</div>}
+                                                    {o.stopLoss !== undefined && <div className="tp-label" style={{ fontSize: 12 }}>SL: {format(o.stopLoss, pricePrecision)}</div>}
                                                 </div>
                                                 <div style={{ textAlign: 'right' }}>
-                                                    <div style={{ fontWeight: 700, color: '#f59e0b' }}>PENDING</div>
+                                                    <div className="tp-pill tp-pending" style={{ fontWeight: 700 }}>PENDING</div>
                                                     <div style={{ marginTop: 6 }}>
                                                         <button onClick={() => cancelOrder(o.id)} style={{ padding: '6px 8px' }}>Cancel</button>
                                                     </div>
@@ -522,17 +521,17 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                                 <div style={{ marginBottom: 10 }}>
                                     <h5 style={{ margin: '6px 0' }}>TP</h5>
                                     {tpOrders.length === 0 ? (
-                                        <div style={{ color: '#6b7280' }}>No active take-profit orders</div>
+                                        <div className="tp-label">No active take-profit orders</div>
                                     ) : (
                                         tpOrders.map((p) => (
-                                            <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: 8, borderRadius: 6, background: '#fff', marginBottom: 6, border: '1px solid #e5e7eb' }}>
+                                            <div key={p.id} className="tp-box" style={{ display: 'flex', justifyContent: 'space-between', padding: 8, borderRadius: 6, marginBottom: 6 }}>
                                                 <div>
                                                     <div style={{ fontWeight: 700 }}>{p.side.toUpperCase()} {formatLot(p.size, lotSize)}</div>
-                                                    <div style={{ fontSize: 12, color: '#6b7280' }}>TP: {format(p.takeProfit!, pricePrecision)}</div>
-                                                    <div style={{ fontSize: 12, color: '#6b7280' }}>Entry: {format(p.entryPrice, pricePrecision)}</div>
+                                                    <div className="tp-label" style={{ fontSize: 12 }}>TP: {format(p.takeProfit!, pricePrecision)}</div>
+                                                    <div className="tp-label" style={{ fontSize: 12 }}>Entry: {format(p.entryPrice, pricePrecision)}</div>
                                                 </div>
                                                 <div style={{ textAlign: 'right' }}>
-                                                    <div style={{ fontWeight: 700, color: '#10b981' }}>ACTIVE</div>
+                                                    <div className="tp-pill tp-active-green" style={{ fontWeight: 700 }}>ACTIVE</div>
                                                 </div>
                                             </div>
                                         ))
@@ -543,17 +542,17 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                                 <div>
                                     <h5 style={{ margin: '6px 0' }}>SL</h5>
                                     {slOrders.length === 0 ? (
-                                        <div style={{ color: '#6b7280' }}>No active stop-loss orders</div>
+                                        <div className="tp-label">No active stop-loss orders</div>
                                     ) : (
                                         slOrders.map((p) => (
-                                            <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: 8, borderRadius: 6, background: '#fff', marginBottom: 6, border: '1px solid #e5e7eb' }}>
+                                            <div key={p.id} className="tp-box" style={{ display: 'flex', justifyContent: 'space-between', padding: 8, borderRadius: 6, marginBottom: 6 }}>
                                                 <div>
                                                     <div style={{ fontWeight: 700 }}>{p.side.toUpperCase()} {formatLot(p.size, lotSize)}</div>
-                                                    <div style={{ fontSize: 12, color: '#6b7280' }}>SL: {format(p.stopLoss!, pricePrecision)}</div>
-                                                    <div style={{ fontSize: 12, color: '#6b7280' }}>Entry: {format(p.entryPrice, pricePrecision)}</div>
+                                                    <div className="tp-label" style={{ fontSize: 12 }}>SL: {format(p.stopLoss!, pricePrecision)}</div>
+                                                    <div className="tp-label" style={{ fontSize: 12 }}>Entry: {format(p.entryPrice, pricePrecision)}</div>
                                                 </div>
                                                 <div style={{ textAlign: 'right' }}>
-                                                    <div style={{ fontWeight: 700, color: '#ef4444' }}>ACTIVE</div>
+                                                    <div className="tp-pill tp-active-red" style={{ fontWeight: 700 }}>ACTIVE</div>
                                                 </div>
                                             </div>
                                         ))
@@ -565,15 +564,15 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                         {activeTab === 'history' && (
                             <div>
                                 <h4 style={{ margin: '8px 0' }}>History</h4>
-                                {history.length === 0 && <div style={{ color: '#6b7280' }}>No closed trades</div>}
+                                {history.length === 0 && <div className="tp-label">No closed trades</div>}
                                 <div style={{ maxHeight: 220, overflow: 'auto' }}>
                                     {history.map((h) => (
-                                        <div key={h.id} style={{ padding: 8, borderRadius: 6, background: '#fff', marginBottom: 6, border: '1px solid #e5e7eb' }}>
+                                        <div key={h.id} className="tp-box" style={{ padding: 8, borderRadius: 6, marginBottom: 6 }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                                 <div style={{ fontWeight: 700 }}>{h.side.toUpperCase()} {formatLot(h.size, lotSize)}</div>
                                                 <div style={{ fontWeight: 700 }}>${format(h.realizedPnl, pricePrecision)}</div>
                                             </div>
-                                            <div style={{ fontSize: 12, color: '#6b7280' }}>Entry {format(h.entryPrice, pricePrecision)} → Exit {format(h.exitPrice, pricePrecision)}</div>
+                                            <div className="tp-label" style={{ fontSize: 12 }}>Entry {format(h.entryPrice, pricePrecision)} → Exit {format(h.exitPrice, pricePrecision)}</div>
                                         </div>
                                     ))}
                                 </div>
@@ -588,7 +587,7 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
                         style={{ height: 10, cursor: 'row-resize', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         title="Drag to resize"
                     >
-                        <div style={{ width: 40, height: 4, borderRadius: 2, background: '#e5e7eb' }} />
+                        <div className="tp-resizer" />
                     </div>
                 </div>
             )}
@@ -599,7 +598,9 @@ const TradingPanel: React.FC<Props> = ({ currentPrice, pricePrecision = 2 }) => 
 // Small sparkline renderer for equity curve (very lightweight)
 const Sparkline: React.FC<{ points: number[]; labels?: string[]; width?: number; height?: number; color?: string; showAxes?: boolean }> = ({ points, labels, width = 400, height = 180, color = '#2563eb', showAxes = true }) => {
     if (!points || points.length === 0) {
-        return <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af' }}>No data</div>;
+        const { effectiveTheme } = useTheme();
+        const themeTextColorLocal = (orig?: string) => (effectiveTheme === 'dark' ? '#000' : orig);
+        return <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: themeTextColorLocal('#9ca3af') }}>No data</div>;
     }
     // reserve margins for axes when requested
     const marginLeft = showAxes ? 36 : 4;
@@ -657,7 +658,11 @@ const Sparkline: React.FC<{ points: number[]; labels?: string[]; width?: number;
 
 // Bars for per-trade P&L
 const BarSparkline: React.FC<{ points: number[]; labels?: string[]; width?: number; height?: number; showAxes?: boolean }> = ({ points, labels, width = 400, height = 180, showAxes = true }) => {
-    if (!points || points.length === 0) return <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af' }}>No data</div>;
+    if (!points || points.length === 0) {
+        const { effectiveTheme } = useTheme();
+        const themeTextColorLocal = (orig?: string) => (effectiveTheme === 'dark' ? '#000' : orig);
+        return <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: themeTextColorLocal('#9ca3af') }}>No data</div>;
+    }
     // margins
     const marginLeft = showAxes ? 36 : 4;
     const marginBottom = showAxes ? 18 : 4;
@@ -694,7 +699,11 @@ const BarSparkline: React.FC<{ points: number[]; labels?: string[]; width?: numb
 
 // Area sparkline for drawdown (percentage)
 const AreaSparkline: React.FC<{ points: number[]; labels?: string[]; width?: number; height?: number; color?: string; showAxes?: boolean }> = ({ points, labels, width = 400, height = 180, color = '#ef4444', showAxes = true }) => {
-    if (!points || points.length === 0) return <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af' }}>No data</div>;
+    if (!points || points.length === 0) {
+        const { effectiveTheme } = useTheme();
+        const themeTextColorLocal = (orig?: string) => (effectiveTheme === 'dark' ? '#000' : orig);
+        return <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: themeTextColorLocal('#9ca3af') }}>No data</div>;
+    }
     const marginLeft = showAxes ? 36 : 4;
     const marginBottom = showAxes ? 18 : 4;
     const marginTop = 6;
@@ -734,7 +743,11 @@ const AreaSparkline: React.FC<{ points: number[]; labels?: string[]; width?: num
 // Use Recharts Pie for win/loss
 const PieChart: React.FC<{ wins: number; losses: number; size?: number }> = ({ wins, losses, size = 140 }) => {
     const total = wins + losses;
-    if (total === 0) return <div style={{ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: 12 }}>—</div>;
+    if (total === 0) {
+        const { effectiveTheme } = useTheme();
+        const themeTextColorLocal = (orig?: string) => (effectiveTheme === 'dark' ? '#000' : orig);
+        return <div style={{ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center', color: themeTextColorLocal('#9ca3af'), fontSize: 12 }}>—</div>;
+    }
     const data = [
         { name: 'Win', value: wins },
         { name: 'Loss', value: losses },
@@ -771,6 +784,8 @@ function formatLot(size: number, lotSize: number = 100000, decimals: number = 2)
     const label = abs === 1 ? 'lot' : 'lots';
     return `${s} ${label}`;
 }
+
+export { computePnl, formatLot };
 
 export default TradingPanel;
 

@@ -33,6 +33,10 @@ interface DrawingOverlayProps {
   pricePrecision: number;
   panHandlers?: PanHandlers;
   aggregatedCandles?: Candle[];
+  // Number of pixels reserved at the bottom for the chart time axis. When provided
+  // the overlay will not cover that area so the axis remains visible and
+  // interactive.
+  timeAxisHeight?: number;
 }
 
 type RectangleHandle = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'middle-left' | 'middle-right';
@@ -94,7 +98,7 @@ const RECTANGLE_OPPOSITE_HANDLE: Record<RectangleHandle, RectangleHandle> = {
 
 const isRectangleHandle = (handle: HandleType): handle is RectangleHandle => RECTANGLE_HANDLES.includes(handle as RectangleHandle);
 
-const getRectangleHandlePositions = (rect: { x: number; y: number; width: number; height: number }) => ({
+export const getRectangleHandlePositions = (rect: { x: number; y: number; width: number; height: number }) => ({
   'top-left': { x: rect.x, y: rect.y },
   'top-right': { x: rect.x + rect.width, y: rect.y },
   'bottom-left': { x: rect.x, y: rect.y + rect.height },
@@ -103,7 +107,7 @@ const getRectangleHandlePositions = (rect: { x: number; y: number; width: number
   'middle-right': { x: rect.x + rect.width, y: rect.y + rect.height / 2 },
 } as const);
 
-const getRectangleChartCorners = (start: ChartPoint, end: ChartPoint) => {
+export const getRectangleChartCorners = (start: ChartPoint, end: ChartPoint) => {
   const minTime = Math.min(start.time, end.time);
   const maxTime = Math.max(start.time, end.time);
   const minPrice = Math.min(start.price, end.price);
@@ -120,12 +124,12 @@ const getRectangleChartCorners = (start: ChartPoint, end: ChartPoint) => {
   } as const;
 };
 
-const getRectangleOppositeCorner = (handle: RectangleHandle, start: ChartPoint, end: ChartPoint): ChartPoint => {
+export const getRectangleOppositeCorner = (handle: RectangleHandle, start: ChartPoint, end: ChartPoint): ChartPoint => {
   const corners = getRectangleChartCorners(start, end);
   return corners[RECTANGLE_OPPOSITE_HANDLE[handle]];
 };
 
-const getPositionHandleXs = (rect: { x: number; width: number }): { left: number; right: number } => {
+export const getPositionHandleXs = (rect: { x: number; width: number }): { left: number; right: number } => {
   const left = rect.x;
   const right = rect.x + rect.width;
 
@@ -137,7 +141,7 @@ const getPositionHandleXs = (rect: { x: number; width: number }): { left: number
   return { left, right };
 };
 
-const clampPositionPrice = (drawing: PositionDrawing, handle: PositionHandleType, price: number): number => {
+export const clampPositionPrice = (drawing: PositionDrawing, handle: PositionHandleType, price: number): number => {
   const entry = drawing.point.price;
   const takeProfit = drawing.takeProfit;
   const stopLoss = drawing.stopLoss;
@@ -169,7 +173,7 @@ const clampPositionPrice = (drawing: PositionDrawing, handle: PositionHandleType
   return Math.min(Math.max(price, minBound), maxBound);
 };
 
-const hasMinimumVerticalSpacing = (
+export const hasMinimumVerticalSpacing = (
   drawing: PositionDrawing,
   handle: PositionHandleType,
   candidatePrice: number,
@@ -207,7 +211,7 @@ const hasMinimumVerticalSpacing = (
   return true;
 };
 
-const normalizeRectanglePoints = (a: ChartPoint, b: ChartPoint): { start: ChartPoint; end: ChartPoint } => {
+export const normalizeRectanglePoints = (a: ChartPoint, b: ChartPoint): { start: ChartPoint; end: ChartPoint } => {
   const minTime = Math.min(a.time, b.time);
   const maxTime = Math.max(a.time, b.time);
   const minPrice = Math.min(a.price, b.price);
@@ -277,7 +281,7 @@ const isCanvasFibonacci = (value: CanvasDrawing | CanvasFibonacci): value is Can
 const isCanvasRectangle = (value: CanvasDrawing): value is CanvasRectangle => value.drawing.type === 'rectangle';
 const isCanvasPosition = (value: CanvasDrawing): value is CanvasPosition => value.drawing.type === 'long' || value.drawing.type === 'short';
 
-const getPointerPosition = (event: PointerEvent<SVGSVGElement>): { x: number; y: number } | null => {
+export const getPointerPosition = (event: PointerEvent<SVGSVGElement>): { x: number; y: number } | null => {
   const rect = (event.currentTarget as SVGSVGElement).getBoundingClientRect();
   if (!rect) {
     return null;
@@ -290,7 +294,7 @@ const getPointerPosition = (event: PointerEvent<SVGSVGElement>): { x: number; y:
 
 // Snap a given price at a given time to the nearest candle's high or low (whichever is closer).
 // Returns the original price if no candles are available.
-const snapToNearestCandleHighLow = (time: number, price: number, candles?: Candle[]): number => {
+export const snapToNearestCandleHighLow = (time: number, price: number, candles?: Candle[]): number => {
   if (!candles || candles.length === 0) return price;
   // Find the candle with the nearest time
   let best: Candle | null = null;
@@ -311,7 +315,7 @@ const snapToNearestCandleHighLow = (time: number, price: number, candles?: Candl
 };
 
 // Snap specifically to the nearest candle high (returns original price if none)
-const snapToNearestCandleHigh = (time: number, candles?: Candle[]): number | null => {
+export const snapToNearestCandleHigh = (time: number, candles?: Candle[]): number | null => {
   if (!candles || candles.length === 0) return null;
   let best: Candle | null = null;
   let bestDelta = Infinity;
@@ -327,7 +331,7 @@ const snapToNearestCandleHigh = (time: number, candles?: Candle[]): number | nul
 };
 
 // Snap specifically to the nearest candle low (returns original price if none)
-const snapToNearestCandleLow = (time: number, candles?: Candle[]): number | null => {
+export const snapToNearestCandleLow = (time: number, candles?: Candle[]): number | null => {
   if (!candles || candles.length === 0) return null;
   let best: Candle | null = null;
   let bestDelta = Infinity;
@@ -342,7 +346,7 @@ const snapToNearestCandleLow = (time: number, candles?: Candle[]): number | null
   return best ? best.low : null;
 };
 
-const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision, panHandlers, aggregatedCandles }: DrawingOverlayProps) => {
+const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision, panHandlers, aggregatedCandles, timeAxisHeight }: DrawingOverlayProps) => {
   const overlayRef = useRef<SVGSVGElement | null>(null);
   const [interaction, setInteraction] = useState<InteractionState>({ type: 'idle' });
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; drawingId: string } | null>(null);
@@ -872,7 +876,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
       const svg = event.currentTarget;
       svg.setPointerCapture(event.pointerId);
 
-  if (activeTool === 'rectangle' || activeTool === 'trendline' || activeTool === 'long' || activeTool === 'short' || activeTool === 'volumeProfile' || activeTool === 'fibonacci') {
+      if (activeTool === 'rectangle' || activeTool === 'trendline' || activeTool === 'long' || activeTool === 'short' || activeTool === 'volumeProfile' || activeTool === 'fibonacci') {
         if (!chartPoint) {
           return;
         }
@@ -1436,7 +1440,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
       onPointerLeave={handlePointerLeave}
       onClick={handleCanvasClick}
       onContextMenu={e => e.preventDefault()}
-      style={{ position: 'absolute', left: 0, top: 0, userSelect: 'none' }}
+      style={{ position: 'absolute', left: 0, top: 0, userSelect: 'none', bottom: timeAxisHeight ? `${timeAxisHeight}px` : undefined }}
     >
       <defs>
         <filter id="selection-shadow" x="-20%" y="-20%" width="140%" height="140%">
@@ -1444,12 +1448,12 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
         </filter>
       </defs>
 
-      {/* Transparent rect to capture pointer events in the main pane area only (excluding axes) */}
+      {/* Transparent rect to capture pointer events over the full canvas area supplied by the parent */}
       <rect
         x="0"
         y="0"
-        width={Math.max(0, width - 60)}
-        height={Math.max(0, height - 50)}
+        width={width}
+        height={height}
         fill="transparent"
         style={{ pointerEvents: 'auto' }}
       />
@@ -1543,7 +1547,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
                     strokeOpacity={drawing.style.opacity ?? 0.9}
                     strokeDasharray="4 3"
                   />
-                  <text x={labelX} y={Math.max(item.rect.y + 12, lvl.y - 6)} fill={drawing.style.labelColor ?? (drawing.style.strokeColor ?? '#f59e0b')} fontSize="11" fontWeight={700}>
+                  <text x={labelX} y={Math.max(item.rect.y + 12, lvl.y - 6)} fill={drawing.style.labelColor ?? (drawing.style.strokeColor ?? '#f59e0b')} fontSize="8" fontWeight={700}>
                     {`${(lvl.ratio * 100).toFixed(lvl.ratio === 0 || lvl.ratio === 1 ? 0 : 1)}% ${lvl.price.toFixed(pricePrecision)}`}
                   </text>
                 </g>
@@ -1740,7 +1744,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
                 }
 
                 return (
-                  <text x={entryX} y={entryYPos} fill={color} fontSize="12" fontWeight="bold">
+                  <text x={entryX} y={entryYPos} fill={color} fontSize="8" fontWeight="bold">
                     {entryText}
                     {rrText && (
                       <tspan fill={color} fontWeight={600} dx="8">
@@ -1878,7 +1882,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
                 return (
                   <g key={i}>
                     <line x1={0} y1={canvas.y} x2={width} y2={canvas.y} stroke="#f59e0b" strokeWidth={1.2} strokeDasharray="4 3" />
-                    <text x={6} y={canvas.y - 6} fill="#f59e0b" fontSize="11" fontWeight={700}>{`${(r * 100).toFixed(r === 0 || r === 1 ? 0 : 1)}% ${price.toFixed(pricePrecision)}`}</text>
+                    <text x={6} y={canvas.y - 6} fill="#f59e0b" fontSize="8" fontWeight={700}>{`${(r * 100).toFixed(r === 0 || r === 1 ? 0 : 1)}% ${price.toFixed(pricePrecision)}`}</text>
                   </g>
                 );
               })}

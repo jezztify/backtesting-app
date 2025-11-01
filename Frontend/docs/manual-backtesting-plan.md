@@ -1,6 +1,6 @@
-# Manual Backtesting Workspace — Plan & Architecture
+# Backtesting Workspace — Plan & Architecture
 
-This document summarizes the design, scope, and implementation plan for the Manual Backtesting Workspace (frontend). It complements the user-facing docs and maps behaviors to the source code under `Frontend/src/`.
+This document summarizes the design, scope, and implementation plan for the Backtesting Workspace (frontend). It complements the user-facing docs and maps behaviors to the source code under `Frontend/src/`.
 
 ## Goals
 

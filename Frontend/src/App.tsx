@@ -56,6 +56,58 @@ const App = () => {
   const [tickRate, setTickRate] = useState<TickRate>(10);
   const [tickSource, setTickSource] = useState<Timeframe>('M1'); // The base timeframe to use as tick data
   const [timeframe, setTimeframe] = useState<Timeframe>('Daily');
+  // When in dual layout, the second chart can use an independent timeframe
+  const [timeframeRight, setTimeframeRight] = useState<Timeframe>(timeframe);
+  const [candlesRight, setCandlesRight] = useState<Candle[]>(candles);
+  // Layout: 'single' or 'dual' charts
+  const [layout, setLayout] = useState<'single' | 'dual'>('single');
+  // Percentage width allocated to the left chart in dual layout (10-90)
+  const [splitPercent, setSplitPercent] = useState<number>(50);
+  const chartWrapperRef = useRef<HTMLDivElement | null>(null);
+  const resizingRef = useRef<{ startX: number; startPercent: number } | null>(null);
+
+  const startChartResize = (clientX: number) => {
+    resizingRef.current = { startX: clientX, startPercent: splitPercent };
+    window.addEventListener('mousemove', onChartMouseMove);
+    window.addEventListener('mouseup', stopChartResize);
+    window.addEventListener('touchmove', onChartTouchMove as any, { passive: false });
+    window.addEventListener('touchend', stopChartResize as any);
+  };
+
+  const onChartMouseMove = (e: MouseEvent) => {
+    if (!resizingRef.current) return;
+    const delta = e.clientX - resizingRef.current.startX;
+    const container = chartWrapperRef.current;
+    if (!container) return;
+    const width = container.getBoundingClientRect().width || 1;
+    const deltaPercent = (delta / width) * 100;
+    let next = resizingRef.current.startPercent + deltaPercent;
+    next = Math.max(10, Math.min(90, next));
+    setSplitPercent(next);
+  };
+
+  const onChartTouchMove = (e: TouchEvent) => {
+    if (!resizingRef.current) return;
+    if (e.touches && e.touches[0]) {
+      const delta = e.touches[0].clientX - resizingRef.current.startX;
+      const container = chartWrapperRef.current;
+      if (!container) return;
+      const width = container.getBoundingClientRect().width || 1;
+      const deltaPercent = (delta / width) * 100;
+      let next = resizingRef.current.startPercent + deltaPercent;
+      next = Math.max(10, Math.min(90, next));
+      setSplitPercent(next);
+      e.preventDefault();
+    }
+  };
+
+  const stopChartResize = () => {
+    resizingRef.current = null;
+    window.removeEventListener('mousemove', onChartMouseMove);
+    window.removeEventListener('mouseup', stopChartResize);
+    window.removeEventListener('touchmove', onChartTouchMove as any);
+    window.removeEventListener('touchend', stopChartResize as any);
+  };
   const [isAggregating, setIsAggregating] = useState<boolean>(false);
   const [aggregationProgress, setAggregationProgress] = useState<number>(0);
   const [useTickPlayback, setUseTickPlayback] = useState<boolean>(true); // Enable tick-by-tick playback
@@ -125,10 +177,25 @@ const App = () => {
     const persisted = loadWorkspaceState(datasetId);
     if (persisted) {
       loadSnapshot(persisted.drawings);
+      // restore last used fibonacci levels into the drawing store when present
+      if (persisted.lastFibonacciLevels && Array.isArray(persisted.lastFibonacciLevels)) {
+        try {
+          // use the store setter to restore levels
+          // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+          const { useDrawingStore } = require('./state/drawingStore');
+          useDrawingStore.getState().setLastFibonacciLevels(persisted.lastFibonacciLevels);
+        } catch (err) {
+          // non-fatal
+        }
+      }
       setPlaybackIndex((index) => {
         const fallback = Math.max(candles.length - 1, 0);
         return Math.min(persisted.playbackIndex, fallback);
       });
+      // Note: intentionally do NOT restore layout or splitPercent from persisted
+      // workspace state when loading a dataset. Restoring these would change the
+      // user's current layout when they load market data; keep the current
+      // layout settings instead (we still restore drawings and playback index).
     } else {
       loadSnapshot([]);
       setPlaybackIndex(Math.max(candles.length - 1, 0));
@@ -142,10 +209,28 @@ const App = () => {
     if (typeof window === 'undefined') {
       return;
     }
-    saveWorkspaceState(datasetId, {
-      drawings,
-      playbackIndex,
-    });
+    // Persist drawings + playback index + last-used fibonacci levels
+    try {
+      // read lastFibonacciLevels directly from the drawing store
+      // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+      const { useDrawingStore } = require('./state/drawingStore');
+      const lastFibonacciLevels = useDrawingStore.getState().lastFibonacciLevels;
+      saveWorkspaceState(datasetId, {
+        drawings,
+        playbackIndex,
+        lastFibonacciLevels,
+        layout,
+        splitPercent,
+      });
+    } catch (err) {
+      // fallback: still save drawings/playbackIndex
+      saveWorkspaceState(datasetId, {
+        drawings,
+        playbackIndex,
+        layout,
+        splitPercent,
+      });
+    }
   }, [datasetId, drawings, playbackIndex]);
 
   useEffect(() => {
@@ -312,6 +397,7 @@ const App = () => {
         setAggregationProgress(Math.floor((processed / total) * 100));
       }).then((aggregated) => {
         setCandles(aggregated);
+        setCandlesRight(aggregated);
         setPlaybackIndex(0); // Start from beginning for tick playback
         setIsAggregating(false);
         setAggregationProgress(0);
@@ -334,6 +420,26 @@ const App = () => {
     }
 
     setIsPlaying(false);
+  };
+
+  // Wrapper handlers for embedding timeframe selectors inside each canvas.
+  // If we have raw M1 tick data, delegate to the aggregation handlers which
+  // re-aggregate and update candles; otherwise just update the timeframe state
+  // so the UI reflects the selection (non-tick datasets don't need aggregation).
+  const onLeftTimeframeChange = async (newTf: Timeframe) => {
+    if (rawM1Candles) {
+      await handleTimeframeChange(newTf);
+    } else {
+      setTimeframe(newTf);
+    }
+  };
+
+  const onRightTimeframeChange = async (newTf: Timeframe) => {
+    if (rawM1Candles) {
+      await handleTimeframeChangeRight(newTf);
+    } else {
+      setTimeframeRight(newTf);
+    }
   };
 
   const handleTimeframeChange = async (newTimeframe: Timeframe) => {
@@ -406,6 +512,64 @@ const App = () => {
     if (wasPlaying) {
       setIsPlaying(true);
     }
+  };
+
+  // Change timeframe for the right-side chart only (dual layout). This mirrors
+  // handleTimeframeChange but updates `candlesRight` and `timeframeRight` so
+  // the second chart can display an independent aggregation.
+  const handleTimeframeChangeRight = async (newTimeframe: Timeframe) => {
+    if (!rawM1Candles) {
+      return;
+    }
+
+    const currentTimestamp = tickSourceData && playbackIndex < tickSourceData.length
+      ? tickSourceData[playbackIndex].time
+      : null;
+
+    setTimeframeRight(newTimeframe);
+    const wasPlaying = isPlaying;
+    setIsPlaying(false);
+    setIsAggregating(true);
+    setAggregationProgress(0);
+
+    const timeframes: Timeframe[] = ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'Daily', 'Weekly', 'Monthly'];
+    const newTimeframeIndex = timeframes.indexOf(newTimeframe);
+    const currentTickSourceIndex = timeframes.indexOf(tickSource);
+
+    let effectiveTickSource = tickSource;
+    if (currentTickSourceIndex > newTimeframeIndex) {
+      effectiveTickSource = 'M1';
+    }
+
+    // Aggregate from M1 to effective tick source if needed
+    let sourceData = rawM1Candles;
+    if (effectiveTickSource !== 'M1') {
+      sourceData = await streamAggregateCandles(rawM1Candles, effectiveTickSource, (processed, total) => {
+        setAggregationProgress(Math.floor((processed / total) * 50));
+      });
+    }
+
+    // Aggregate from tick source to the requested display timeframe
+    const aggregated = await streamAggregateCandles(sourceData, newTimeframe, (processed, total) => {
+      const baseProgress = effectiveTickSource !== 'M1' ? 50 : 0;
+      setAggregationProgress(baseProgress + Math.floor((processed / total) * 50));
+    });
+
+    setCandlesRight(aggregated);
+
+    // Map playback index into sourceData
+    if (currentTimestamp !== null) {
+      const newIndex = sourceData.findIndex(c => c.time >= currentTimestamp);
+      if (newIndex !== -1) setPlaybackIndex(newIndex);
+      else setPlaybackIndex(Math.max(sourceData.length - 1, 0));
+    } else {
+      setPlaybackIndex(0);
+    }
+
+    setIsAggregating(false);
+    setAggregationProgress(0);
+
+    if (wasPlaying) setIsPlaying(true);
   };
 
   const handleResetSample = () => {
@@ -552,30 +716,35 @@ const App = () => {
 
   return (
     <div className="app">
-      <header>
-        <div className="header-title">
-          <h1>Manual Backtesting Workspace</h1>
+      <header style={{ height: 24, overflow: 'hidden' }}>
+        <div className="header-title" style={{ height: 24, display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+          <h1 style={{ fontSize: 12, margin: 0, lineHeight: '20px' }}>Backtesting Workspace</h1>
         </div>
-        <div className="header-controls">
-          <ThemeToggle value={themePreference} onChange={setThemePreference} />
-          <DataLoader onDatasetLoaded={handleDatasetLoaded} />
-          {rawM1Candles && (
-            <TimeframeSelector
-              selectedTimeframe={timeframe}
-              onTimeframeChange={handleTimeframeChange}
-              disabled={isAggregating}
-            />
-          )}
+        <div className="header-controls" style={{ display: 'flex', alignItems: 'center', gap: 8, height: 24, overflow: 'hidden' }}>
+          <div style={{ height: 20, display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+            <ThemeToggle value={themePreference} onChange={setThemePreference} />
+          </div>
+          <div style={{ height: 20, display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+            <DataLoader onDatasetLoaded={handleDatasetLoaded} />
+          </div>
+          {/* Layout selector placed next to Load Market Data (DataLoader) */}
+          <label style={{ marginLeft: 12, display: 'inline-flex', alignItems: 'center', height: 20, fontSize: 12 }}>
+            Layout:
+            <select value={layout} onChange={(e) => setLayout(e.target.value as any)} style={{ marginLeft: 8, height: 20, fontSize: 12, padding: '0 6px' }}>
+              <option value="single">1 chart</option>
+              <option value="dual">2 charts</option>
+            </select>
+          </label>
           {isAggregating && (
-            <div className="aggregation-indicator">
+            <div className="aggregation-indicator" style={{ height: 20, fontSize: 12, display: 'flex', alignItems: 'center' }}>
               Aggregating data... {aggregationProgress}%
             </div>
           )}
           <button
-            style={{ marginLeft: 16, padding: '6px 18px', borderRadius: 8, border: 'none', background: '#2563eb', color: '#fff', fontWeight: 500, cursor: 'pointer' }}
+            style={{ marginLeft: 16, padding: '2px 8px', borderRadius: 8, border: 'none', background: '#2563eb', color: '#fff', fontWeight: 500, cursor: 'pointer', height: 20, fontSize: 12, lineHeight: '20px' }}
             onClick={() => setActiveView('marketData')}
           >
-            Fetch<br />Market Data
+            Fetch Market Data
           </button>
         </div>
       </header>
@@ -588,46 +757,98 @@ const App = () => {
             onOpenCanvasSettings={() => setShowCanvasModal(true)}
           />
           <div className="chart-area" style={{ flex: 1, minWidth: 0 }}>
-            <div className="chart-wrapper">
-              <ChartContainer
-                candles={candles}
-                // Pass the raw playbackIndex (in base tick units) so the chart
-                // can re-aggregate base ticks up to the correct tick when
-                // building the visible dataset. Previously this passed the
-                // derived displayPlaybackIndex which is an index into the
-                // already-aggregated display candles; that caused mismatches
-                // when the chart re-aggregated using the wrong index and led
-                // to the inconsistent dates observed when switching timeframes.
-                playbackIndex={playbackIndex}
-                timeframe={timeframe}
-                isPlaying={isPlaying}
-                theme={effectiveTheme}
-                onChartReady={handleChartReady}
-                showCanvasModal={showCanvasModal}
-                setShowCanvasModal={setShowCanvasModal}
-                baseTicks={tickSourceData}
-                baseTimeframe={tickSource}
-              />
+            <div ref={chartWrapperRef} className="chart-wrapper" style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
+              {layout === 'single' ? (
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', marginBottom: 8 }}>
+                    <TimeframeSelector selectedTimeframe={timeframe} onTimeframeChange={onLeftTimeframeChange} disabled={isAggregating} />
+                  </div>
+                  <ChartContainer
+                    candles={candles}
+                    playbackIndex={playbackIndex}
+                    timeframe={timeframe}
+                    isPlaying={isPlaying}
+                    theme={effectiveTheme}
+                    onChartReady={handleChartReady}
+                    showCanvasModal={showCanvasModal}
+                    setShowCanvasModal={setShowCanvasModal}
+                    baseTicks={tickSourceData}
+                    baseTimeframe={tickSource}
+                  />
+                </div>
+              ) : (
+                // Dual layout: render two ChartContainers side-by-side that share the same
+                // drawing store and base tick data, but can use independent timeframes.
+                <>
+                  <div style={{ flexBasis: `${splitPercent}%`, flexGrow: 0, flexShrink: 0, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', marginBottom: 8 }}>
+                      <TimeframeSelector selectedTimeframe={timeframe} onTimeframeChange={onLeftTimeframeChange} disabled={isAggregating} />
+                    </div>
+                    <ChartContainer
+                      candles={candles}
+                      playbackIndex={playbackIndex}
+                      timeframe={timeframe}
+                      isPlaying={isPlaying}
+                      theme={effectiveTheme}
+                      onChartReady={handleChartReady}
+                      showCanvasModal={showCanvasModal}
+                      setShowCanvasModal={setShowCanvasModal}
+                      baseTicks={tickSourceData}
+                      baseTimeframe={tickSource}
+                    />
+                  </div>
+                  {/* vertical resizer */}
+                  <div
+                    className="chart-resizer"
+                    onMouseDown={(e) => { e.preventDefault(); startChartResize(e.clientX); }}
+                    onTouchStart={(e) => { startChartResize(e.touches[0].clientX); }}
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label="Resize charts"
+                  />
+
+                  <div style={{ flexBasis: `${100 - splitPercent}%`, flexGrow: 0, flexShrink: 0, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', marginBottom: 8 }}>
+                      <TimeframeSelector selectedTimeframe={timeframeRight} onTimeframeChange={onRightTimeframeChange} disabled={isAggregating} />
+                    </div>
+                    <ChartContainer
+                      candles={candlesRight}
+                      playbackIndex={playbackIndex}
+                      timeframe={timeframeRight}
+                      isPlaying={isPlaying}
+                      theme={effectiveTheme}
+                      // second chart doesn't need to rebind the shared onChartReady
+                      onChartReady={undefined}
+                      showCanvasModal={showCanvasModal}
+                      setShowCanvasModal={setShowCanvasModal}
+                      baseTicks={tickSourceData}
+                      baseTimeframe={tickSource}
+                    />
+                  </div>
+                </>
+              )}
             </div>
-            <div className="playback-panel">
-              <PlaybackControls
-                playbackIndex={playbackIndex}
-                maxIndex={useTickPlayback && tickSourceData
-                  ? Math.max(tickSourceData.length - 1, 0)
-                  : Math.max(candles.length - 1, 0)
-                }
-                isPlaying={isPlaying}
-                tickRate={tickRate}
-                tickSource={tickSource}
-                availableTickSources={availableTickSources}
-                onTogglePlay={handleTogglePlay}
-                onSeek={seek}
-                onStep={step}
-                onTickRateChange={setTickRate}
-                onTickSourceChange={handleTickSourceChange}
-                onJumpToCurrent={handleJumpToCurrent}
-              />
-              <div style={{ marginTop: 12 }}>
+            <div className="bottom-panel">
+              <div className="playback-area">
+                <PlaybackControls
+                  playbackIndex={playbackIndex}
+                  maxIndex={useTickPlayback && tickSourceData
+                    ? Math.max(tickSourceData.length - 1, 0)
+                    : Math.max(candles.length - 1, 0)
+                  }
+                  isPlaying={isPlaying}
+                  tickRate={tickRate}
+                  tickSource={tickSource}
+                  availableTickSources={availableTickSources}
+                  onTogglePlay={handleTogglePlay}
+                  onSeek={seek}
+                  onStep={step}
+                  onTickRateChange={setTickRate}
+                  onTickSourceChange={handleTickSourceChange}
+                  onJumpToCurrent={handleJumpToCurrent}
+                />
+              </div>
+              <div className="trading-area">
                 {/* Determine price precision from the display candles so the trading panel uses the same formatting */}
                 <TradingPanel
                   currentPrice={displayCandles[displayPlaybackIndex]?.close}

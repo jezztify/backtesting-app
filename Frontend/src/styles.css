@@ -380,7 +380,8 @@ header {
   width: 100%;
   min-width: 0;
   overflow: hidden;
-  padding: 1rem 1.5rem 0.75rem 1rem;
+  /* reduce bottom padding so chart time axis has room to render */
+  padding: 0rem 0.2rem 2.5rem 0.2rem;
 }
 
 .chart-container {
@@ -415,12 +416,43 @@ header {
   stroke-width: 1.5;
 }
 
-.playback-panel {
-  padding: 1.2rem 1.5rem;
+.bottom-panel {
+  display: flex;
+  flex-direction: column;
+  /* stack rows: playback controls on top, trading panel below */
+  align-items: stretch;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
   background: var(--color-playback-surface);
   border-top: 1px solid var(--color-playback-border);
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.15);
   backdrop-filter: blur(18px);
+}
+
+.bottom-panel .playback-area {
+  width: 100%;
+}
+
+.bottom-panel .trading-area {
+  width: 100%;
+}
+
+/* Vertical resizer between dual charts */
+.chart-resizer {
+  width: 10px;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+.chart-resizer::before {
+  content: '';
+  width: 2px;
+  height: 48px;
+  background: rgba(15, 23, 42, 0.12);
+  border-radius: 2px;
 }
 
 .playback-controls {
@@ -690,4 +722,112 @@ button.ghost:hover {
   .playback-speed {
     justify-content: space-between;
   }
+}
+
+/* Trading panel: centralized styles and theme overrides */
+.trading-panel {
+  border-radius: 8px;
+  background: var(--color-panel);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.trading-panel .trading-panel-title {
+  font-weight: 700;
+}
+
+.trading-panel .tp-label {
+  color: var(--color-text-muted);
+}
+
+.trading-panel .tp-value {
+  color: var(--color-text);
+}
+
+.trading-panel .tp-card {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.trading-panel .tp-btn {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-panel);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.trading-panel .tp-btn.danger {
+  border-color: rgba(239, 68, 68, 0.35);
+  color: var(--color-danger);
+}
+
+.trading-panel .tp-tab {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.trading-panel .tp-tab.active {
+  background: var(--color-panel);
+  border-color: var(--color-border-strong);
+  font-weight: 700;
+}
+
+.trading-panel .tp-small-btn {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.trading-panel .tp-small-btn.active {
+  background: var(--color-text);
+  color: var(--color-text-inverse);
+}
+
+.trading-panel .tp-pill {
+  display: inline-block;
+}
+
+.trading-panel .tp-pending {
+  color: #f59e0b;
+}
+
+.trading-panel .tp-active-green {
+  color: #10b981;
+}
+
+.trading-panel .tp-active-red {
+  color: #ef4444;
+}
+
+/* Ensure summary / positions / orders / history content boxes stay white in dark mode */
+.trading-panel--dark .tp-box {
+  background: #ffffff !important;
+  border-color: #e5e7eb !important;
+  color: #000 !important;
+}
+
+/* default tp-box appearance (use CSS vars so themes can adapt) */
+.trading-panel .tp-box {
+  background: var(--color-panel);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  border-radius: 6px;
+}
+
+/* resizer handle inside trading panel */
+.trading-panel .tp-resizer {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-border);
 }

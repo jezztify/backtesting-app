@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useCanvasStore } from '../state/canvasStore';
 
 export type ThemePreference = 'light' | 'dark' | 'system';
 
@@ -47,12 +48,24 @@ const applyThemeToDocument = (theme: ThemePreference, effectiveTheme: 'light' | 
         root.style.setProperty('--color-chart-grid', 'rgba(148, 163, 184, 0.25)');
         root.style.setProperty('--color-success', '#16a34a');
         root.style.setProperty('--color-danger', '#ef4444');
+        // Mirror canvas background to match theme
+        try {
+            useCanvasStore.getState().setSettings({ background: '#ffffff' });
+        } catch (e) {
+            // ignore in environments where store isn't available
+        }
     } else {
         root.style.setProperty('--color-chart-surface', '#0f172a');
         root.style.setProperty('--color-chart-text', '#cbd5f5');
         root.style.setProperty('--color-chart-grid', 'rgba(148, 163, 184, 0.1)');
         root.style.setProperty('--color-success', '#26a69a');
         root.style.setProperty('--color-danger', '#ef5350');
+        // Mirror canvas background to match theme
+        try {
+            useCanvasStore.getState().setSettings({ background: '#0f172a' });
+        } catch (e) {
+            // ignore in environments where store isn't available
+        }
     }
 };
 

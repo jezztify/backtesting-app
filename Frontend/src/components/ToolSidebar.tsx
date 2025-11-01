@@ -77,19 +77,23 @@ const ToolSidebar = ({ datasetLabel, timeframe, onResetSample, onOpenCanvasSetti
         );
       case 'volumeProfile':
         return (
-          <svg {...common} aria-hidden>
-            <rect x="3" y="12" width="3" height="6" fill="currentColor" />
-            <rect x="8" y="9" width="3" height="9" fill="currentColor" />
-            <rect x="13" y="6" width="3" height="12" fill="currentColor" />
-            <rect x="18" y="3" width="3" height="15" fill="currentColor" />
-          </svg>
+          <span
+            className="material-symbols-outlined"
+            style={{ fontSize: size, lineHeight: 1, display: 'inline-block' }}
+            aria-hidden
+          >
+            sort
+          </span>
         );
       case 'fibonacci':
         return (
-          <svg {...common} aria-hidden>
-            <line x1="3" y1="20" x2="21" y2="4" stroke="currentColor" strokeWidth="1.6" />
-            <line x1="3" y1="16" x2="21" y2="0" stroke="currentColor" strokeWidth="1" opacity="0.6" />
-          </svg>
+          <span
+            className="material-symbols-outlined"
+            style={{ fontSize: size, lineHeight: 1, display: 'inline-block' }}
+            aria-hidden
+          >
+            density_small
+          </span>
         );
       case 'long':
         return (

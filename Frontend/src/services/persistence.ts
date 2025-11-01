@@ -5,6 +5,11 @@ const STORAGE_KEY = 'manual-backtesting-workspaces';
 interface WorkspaceState {
   drawings: Drawing[];
   playbackIndex: number;
+  // Persist last-used fibonacci levels so new drawings can reuse them
+  lastFibonacciLevels?: number[];
+  // UI chart settings
+  layout?: 'single' | 'dual';
+  splitPercent?: number;
 }
 
 type WorkspaceMap = Record<string, WorkspaceState>;
