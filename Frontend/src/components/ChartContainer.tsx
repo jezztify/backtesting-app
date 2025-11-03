@@ -121,9 +121,11 @@ interface ChartContainerProps {
     getCanvasWidth: () => number;
     centerPrice: (price: number) => void;
     getVisibleCandlesCount: () => number;
+    getLatestLogicalPosition?: () => number;
   }) => void;
   showCanvasModal: boolean;
   setShowCanvasModal: (show: boolean) => void;
+  onJumpToCurrent?: () => void;
 }
 
 interface PanSession {
@@ -305,7 +307,7 @@ const useResizeObserver = (
 };
 
 
-const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackIndex, timeframe, isPlaying = false, theme, onChartReady, showCanvasModal, setShowCanvasModal }: ChartContainerProps) => {
+const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackIndex, timeframe, isPlaying = false, theme, onChartReady, showCanvasModal, setShowCanvasModal, onJumpToCurrent }: ChartContainerProps) => {
   // Track previous last candle index, playback index, candle count, and visible candles count for autoscroll logic
   const prevLastCandleIdxRef = useRef<number>(-1);
   const prevPlaybackIdxRef = useRef<number>(-1);
@@ -450,11 +452,35 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
     return Math.round(visibleLogicalRange.to - visibleLogicalRange.from);
   }, []);
 
+  // Return the logical timescale index of the latest (right-most) timeframe candle.
+  // This index is in the chart's logical space and already accounts for padding
+  // whitespace added to the left of the dataset.
+  const getLatestLogicalPosition = useCallback((): number => {
+    const lastIndex = Math.max(0, candles.length - 1);
+    const paddingOffset = getTimeframePadding(timeframe);
+    return lastIndex + paddingOffset;
+  }, [candles.length, timeframe]);
+
   useEffect(() => {
     if (onChartReady && chartRef.current) {
-      onChartReady({ scrollToIndex, getCanvasWidth, centerPrice, getVisibleCandlesCount });
+      onChartReady({ scrollToIndex, getCanvasWidth, centerPrice, getVisibleCandlesCount, getLatestLogicalPosition });
     }
-  }, [onChartReady, scrollToIndex, getCanvasWidth, centerPrice, getVisibleCandlesCount]);
+  }, [onChartReady, scrollToIndex, getCanvasWidth, centerPrice, getVisibleCandlesCount, getLatestLogicalPosition]);
+
+  // When playback is active, run getLatestLogicalPosition on every tick
+  // (playbackIndex updates each tick from the parent). We store the last
+  // value in a ref so other internal logic can read it if needed.
+  const latestLogicalAtTickRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!isPlaying) return;
+    try {
+      const pos = getLatestLogicalPosition();
+      latestLogicalAtTickRef.current = pos;
+      // no-op otherwise; function intentionally invoked each tick
+    } catch (err) {
+      // ignore errors from caller
+    }
+  }, [isPlaying, playbackIndex, getLatestLogicalPosition]);
 
   useEffect(() => {
     if (seriesRef.current && priceFormat) {
@@ -483,7 +509,7 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
       // Get the initial price range for vertical panning
       const priceScale = series.priceScale();
       const initialPriceRange = priceScale.getVisibleRange();
-
+      
       return {
         initialRange: { from: range.from, to: range.to },
         startLogical,
@@ -569,7 +595,7 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
     chartRef.current = chart;
     seriesRef.current = series;
 
-    const bounding = containerRef.current.getBoundingClientRect();
+  const bounding = containerRef.current.getBoundingClientRect();
     chart.resize(bounding.width, bounding.height);
     setDimensions({ width: bounding.width, height: bounding.height });
 
@@ -614,6 +640,24 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
     containerRef.current.addEventListener('pointerdown', onPointerDownCapture, true);
     window.addEventListener('pointerup', onPointerUp);
 
+    // Double-click on the time axis should jump to current (latest bar).
+    const TIME_AXIS_HEIGHT = 24; // px — keep in sync with rendering
+    const onDoubleClick = (e: MouseEvent) => {
+      try {
+        if (!containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        // If the double-click happened within the bottom TIME_AXIS_HEIGHT px,
+        // consider it a time-axis double-click and trigger jump to current.
+        if (e.clientY >= rect.bottom - TIME_AXIS_HEIGHT) {
+          onJumpToCurrent?.();
+        }
+      } catch (err) {
+        // non-fatal
+      }
+    };
+
+    containerRef.current.addEventListener('dblclick', onDoubleClick);
+
     return () => {
       chart.timeScale().unsubscribeVisibleTimeRangeChange(handleVisibleChange);
       if (timeoutId !== null) {
@@ -624,6 +668,7 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
       seriesRef.current = null;
       containerRef.current?.removeEventListener('pointerdown', onPointerDownCapture, true);
       window.removeEventListener('pointerup', onPointerUp);
+      containerRef.current?.removeEventListener('dblclick', onDoubleClick);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeframe]);

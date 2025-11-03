@@ -774,6 +774,7 @@ const App = () => {
                     setShowCanvasModal={setShowCanvasModal}
                     baseTicks={tickSourceData}
                     baseTimeframe={tickSource}
+                    onJumpToCurrent={handleJumpToCurrent}
                   />
                 </div>
               ) : (
@@ -795,6 +796,7 @@ const App = () => {
                       setShowCanvasModal={setShowCanvasModal}
                       baseTicks={tickSourceData}
                       baseTimeframe={tickSource}
+                      onJumpToCurrent={handleJumpToCurrent}
                     />
                   </div>
                   {/* vertical resizer */}
@@ -823,6 +825,7 @@ const App = () => {
                       setShowCanvasModal={setShowCanvasModal}
                       baseTicks={tickSourceData}
                       baseTimeframe={tickSource}
+                      onJumpToCurrent={handleJumpToCurrent}
                     />
                   </div>
                 </>

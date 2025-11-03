@@ -4,3 +4,4 @@ dist/
 .vscode/
 Frontend/src/data/*
 Frontend/coverage/
+data/
