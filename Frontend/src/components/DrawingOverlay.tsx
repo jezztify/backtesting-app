@@ -432,8 +432,9 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
           if (!start || !end) {
             const rectW = MIN_W;
             const rectH = MIN_H;
-            const rectX = Math.max(0, Math.min(width - rectW, anchor.x - rectW / 2));
-            const rectY = Math.max(0, Math.min(height - rectH, anchor.y - rectH / 2));
+            // Don't clamp to canvas - allow position to move off-screen naturally
+            const rectX = anchor.x - rectW / 2;
+            const rectY = anchor.y - rectH / 2;
 
             const centerX = rectX + rectW / 2;
             const centerY = rectY + rectH / 2;
@@ -463,30 +464,26 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
             } satisfies CanvasPosition;
           }
 
-          const clippedX = Math.max(0, Math.min(start.x, end.x, width));
-          const clippedY = Math.max(0, Math.min(start.y, end.y, height));
-          const clippedX2 = Math.min(width, Math.max(start.x, end.x, 0));
-          const clippedY2 = Math.min(height, Math.max(start.y, end.y, 0));
-
-          let rectX = clippedX;
-          let rectY = clippedY;
-          let rectW = clippedX2 - clippedX;
-          let rectH = clippedY2 - clippedY;
+          // Don't clip to canvas boundaries - allow natural off-screen movement
+          let rectX = Math.min(start.x, end.x);
+          let rectY = Math.min(start.y, end.y);
+          let rectW = Math.abs(end.x - start.x);
+          let rectH = Math.abs(end.y - start.y);
 
           if (rectW <= 0) {
             rectW = MIN_W;
-            rectX = Math.max(0, Math.min(width - rectW, anchor.x - rectW / 2));
+            rectX = anchor.x - rectW / 2;
           }
 
           if (rectH <= 0) {
             rectH = MIN_H;
-            rectY = Math.max(0, Math.min(height - rectH, anchor.y - rectH / 2));
+            rectY = anchor.y - rectH / 2;
           }
 
           const rect = { x: rectX, y: rectY, width: rectW, height: rectH };
           const point = pointCandidate ?? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
 
-          const clampY = (value: number) => Math.max(0, Math.min(height, value));
+          // Remove clamping - allow positions to move naturally off-screen
           const centerX = rect.x + rect.width / 2;
 
           let takeProfitPoint = drawing.takeProfit !== undefined
@@ -494,7 +491,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
             : null;
           if (!takeProfitPoint && drawing.takeProfit !== undefined) {
             const fallbackY = drawing.type === 'long' ? rect.y : rect.y + rect.height;
-            takeProfitPoint = { x: centerX, y: clampY(fallbackY) };
+            takeProfitPoint = { x: centerX, y: fallbackY };
           }
 
           let stopLossPoint = drawing.stopLoss !== undefined
@@ -503,7 +500,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
           if (!stopLossPoint && drawing.stopLoss !== undefined) {
             const baseY = drawing.type === 'long' ? rect.y + rect.height : rect.y;
             const direction = drawing.type === 'long' ? 1 : -1;
-            const fallbackY = clampY(baseY + direction * Math.max(MIN_H, rect.height / 2));
+            const fallbackY = baseY + direction * Math.max(MIN_H, rect.height / 2);
             stopLossPoint = { x: centerX, y: fallbackY };
           }
 
@@ -577,20 +574,38 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
           for (let i = 0; i < buckets; i++) {
             const priceBottom = minPrice + i * binHeightPrice;
             const priceTop = minPrice + (i + 1) * binHeightPrice;
-            const topCanvas = converters.toCanvas({ time: vp.start.time, price: priceTop });
-            const bottomCanvas = converters.toCanvas({ time: vp.start.time, price: priceBottom });
-            if (!topCanvas || !bottomCanvas) {
-              // If conversion fails, skip this bin
-              continue;
+            let topCanvas = converters.toCanvas({ time: vp.start.time, price: priceTop });
+            let bottomCanvas = converters.toCanvas({ time: vp.start.time, price: priceBottom });
+            
+            // If conversion fails (price outside visible range), clamp to canvas boundaries
+            // This ensures all bins are rendered even when partially outside the visible range
+            if (!topCanvas) {
+              // Price is outside visible range - clamp to top (y=0) or bottom (y=height) of canvas
+              // Higher prices map to lower y values (inverted), so if priceTop is too high, y should be 0
+              topCanvas = { x: start.x, y: priceTop > maxPrice ? 0 : height };
             }
+            if (!bottomCanvas) {
+              bottomCanvas = { x: start.x, y: priceBottom > maxPrice ? 0 : height };
+            }
+            
             const y1 = Math.min(topCanvas.y, bottomCanvas.y);
             const y2 = Math.max(topCanvas.y, bottomCanvas.y);
+            
+            // Skip bins that are completely outside the canvas (but keep those partially visible)
+            if (y2 < 0 || y1 > height) {
+              continue;
+            }
+            
+            // Clamp to canvas boundaries
+            const clampedY1 = Math.max(0, Math.min(height, y1));
+            const clampedY2 = Math.max(0, Math.min(height, y2));
+            
             const upVol = upVolumes[i] || 0;
             const downVol = downVolumes[i] || 0;
             const total = upVol + downVol;
             const upRatio = upVol / maxTotal;
             const downRatio = downVol / maxTotal;
-            bins.push({ priceTop, priceBottom, volume: total, upVolume: upVol, downVolume: downVol, upRatio, downRatio, y1, y2 });
+            bins.push({ priceTop, priceBottom, volume: total, upVolume: upVol, downVolume: downVol, upRatio, downRatio, y1: clampedY1, y2: clampedY2 });
           }
 
           return {
