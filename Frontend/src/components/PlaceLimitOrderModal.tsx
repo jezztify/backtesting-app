@@ -59,86 +59,172 @@ const PlaceLimitOrderModal: React.FC<Props> = ({ drawing, equity, pricePrecision
     const dollarReward = tp !== undefined ? dollarRisk * (rrr !== 'n/a' ? Number(rrr) : 0) : 0;
 
     return (
-        <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <strong style={{ fontSize: 14 }}>Place Limit Order</strong>
-                <button onClick={() => onClose()} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>×</button>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    <div>Entry</div>
-                    <div style={{ fontWeight: 700 }}>{entry.toFixed(pricePrecision)}</div>
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    <div>Stop Loss</div>
-                    <div style={{ fontWeight: 700 }}>{sl !== undefined ? sl.toFixed(pricePrecision) : 'n/a'}</div>
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    <div>Take Profit</div>
-                    <div style={{ fontWeight: 700 }}>{tp !== undefined ? tp.toFixed(pricePrecision) : 'n/a'}</div>
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    <div>Equity</div>
-                    <div style={{ fontWeight: 700 }}>${equity.toFixed(2)}</div>
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    <div>Reward/Risk Ratio</div>
-                    <div style={{ fontWeight: 700 }}>{rrr}</div>
-                </div>
-            </div>
-
-            <div style={{ marginBottom: 8 }}>
-                <label style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)' }}>Risk % of Equity</label>
-                <input
-                    type="number"
-                    min={0}
-                    step={0.1}
-                    value={riskPercent}
-                    onChange={(e) => {
-                        const val = Number(e.target.value);
-                        setRiskPercent(isNaN(val) ? 0 : val);
-                        if (unitRisk > 0 && !isNaN(val) && val > 0) {
-                            const computedUnits = Math.max(0, (equity * (val / 100)) / unitRisk);
-                            // set size in lots
-                            setSize(computedUnits / lotSize);
-                        }
+        <div style={{ 
+            height: '100%', 
+            display: 'flex', 
+            flexDirection: 'column',
+            fontSize: '13px'
+        }}>
+            {/* Header */}
+            <div style={{ 
+                margin: 0,
+                padding: '12px 16px',
+                fontSize: '14px',
+                fontWeight: 600,
+                borderBottom: '1px solid var(--color-border)',
+                background: 'var(--color-button-bg)',
+                borderRadius: '6px 6px 0 0',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+            }}>
+                <span>Place Limit Order</span>
+                <button 
+                    onClick={() => onClose()} 
+                    style={{ 
+                        background: 'transparent', 
+                        border: 'none', 
+                        cursor: 'pointer',
+                        fontSize: '20px',
+                        lineHeight: 1,
+                        color: 'var(--color-text)',
+                        padding: 0,
+                        width: '24px',
+                        height: '24px'
                     }}
-                    style={{ width: '100%', padding: 8, boxSizing: 'border-box', marginTop: 6 }}
-                />
+                >
+                    ×
+                </button>
             </div>
 
-            <div style={{ marginBottom: 8 }}>
-                <label style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)' }}>Size (lots)</label>
-                <input
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    value={computedSizeLots}
-                    onChange={(e) => {
-                        const val = Number(e.target.value);
-                        setSize(isNaN(val) ? 0 : val);
-                    }}
-                    style={{ width: '100%', padding: 8, boxSizing: 'border-box', marginTop: 6 }}
-                />
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 6 }}>Units: {computedSizeUnits.toLocaleString()}</div>
-            </div>
-
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', marginBottom: 8 }}>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    <div>Risk ($)</div>
-                    <div style={{ fontWeight: 700 }}>${dollarRisk.toFixed(2)}</div>
+            {/* Content */}
+            <div style={{ 
+                flex: 1,
+                overflowY: 'auto',
+                padding: '16px'
+            }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                        <div>Entry</div>
+                        <div style={{ fontWeight: 700 }}>{entry.toFixed(pricePrecision)}</div>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                        <div>Stop Loss</div>
+                        <div style={{ fontWeight: 700 }}>{sl !== undefined ? sl.toFixed(pricePrecision) : 'n/a'}</div>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                        <div>Take Profit</div>
+                        <div style={{ fontWeight: 700 }}>{tp !== undefined ? tp.toFixed(pricePrecision) : 'n/a'}</div>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                        <div>Equity</div>
+                        <div style={{ fontWeight: 700 }}>${equity.toFixed(2)}</div>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                        <div>Reward/Risk Ratio</div>
+                        <div style={{ fontWeight: 700 }}>{rrr}</div>
+                    </div>
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    <div>Reward ($)</div>
-                    <div style={{ fontWeight: 700 }}>${dollarReward.toFixed(2)}</div>
-                </div>
-            </div>
 
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button onClick={onCancel} style={{ padding: '8px 12px', background: 'var(--color-button-bg)', border: '1px solid var(--color-border)', borderRadius: 6 }}>Cancel</button>
-                {/* Convert lots to units when calling onPlace so store receives expected units */}
-                <button onClick={() => onPlace(Math.max(0, computedSizeUnits), riskPercent)} style={{ padding: '8px 12px', background: 'var(--color-accent)', color: 'var(--color-text-inverse)', border: 'none', borderRadius: 6 }}>Place</button>
+                <div style={{ marginBottom: 12 }}>
+                    <label style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>Risk % of Equity</label>
+                    <input
+                        type="number"
+                        min={0}
+                        step={0.1}
+                        value={riskPercent}
+                        onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setRiskPercent(isNaN(val) ? 0 : val);
+                            if (unitRisk > 0 && !isNaN(val) && val > 0) {
+                                const computedUnits = Math.max(0, (equity * (val / 100)) / unitRisk);
+                                // set size in lots
+                                setSize(computedUnits / lotSize);
+                            }
+                        }}
+                        style={{ 
+                            width: '100%', 
+                            padding: '8px 10px', 
+                            boxSizing: 'border-box',
+                            background: 'var(--color-bg)',
+                            border: '1px solid var(--color-border)',
+                            borderRadius: 4,
+                            color: 'var(--color-text)',
+                            fontSize: '13px'
+                        }}
+                    />
+                </div>
+
+                <div style={{ marginBottom: 12 }}>
+                    <label style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>Size (lots)</label>
+                    <input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={computedSizeLots}
+                        onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setSize(isNaN(val) ? 0 : val);
+                        }}
+                        style={{ 
+                            width: '100%', 
+                            padding: '8px 10px', 
+                            boxSizing: 'border-box',
+                            background: 'var(--color-bg)',
+                            border: '1px solid var(--color-border)',
+                            borderRadius: 4,
+                            color: 'var(--color-text)',
+                            fontSize: '13px'
+                        }}
+                    />
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 6 }}>Units: {computedSizeUnits.toLocaleString()}</div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', marginBottom: 16 }}>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                        <div>Risk ($)</div>
+                        <div style={{ fontWeight: 700 }}>${dollarRisk.toFixed(2)}</div>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                        <div>Reward ($)</div>
+                        <div style={{ fontWeight: 700 }}>${dollarReward.toFixed(2)}</div>
+                    </div>
+                </div>
+
+                {/* Footer Buttons */}
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <button 
+                        onClick={onCancel} 
+                        style={{ 
+                            padding: '8px 16px', 
+                            background: 'var(--color-button-bg)', 
+                            border: '1px solid var(--color-border)', 
+                            borderRadius: 6,
+                            color: 'var(--color-text)',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            fontWeight: 500
+                        }}
+                    >
+                        Cancel
+                    </button>
+                    {/* Convert lots to units when calling onPlace so store receives expected units */}
+                    <button 
+                        onClick={() => onPlace(Math.max(0, computedSizeUnits), riskPercent)} 
+                        style={{ 
+                            padding: '8px 16px', 
+                            background: 'var(--color-accent)', 
+                            color: 'var(--color-text-inverse)', 
+                            border: 'none', 
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            fontWeight: 500
+                        }}
+                    >
+                        Place
+                    </button>
+                </div>
             </div>
         </div>
     );

@@ -10,7 +10,16 @@ import PlaceLimitOrderModal from '../components/PlaceLimitOrderModal';
 
 describe('PlaceLimitOrderModal smoke', () => {
     it('renders without crashing', () => {
-        const { container } = render(<PlaceLimitOrderModal drawingId={undefined as any} onClose={() => { }} /> as any);
+        const { container } = render(
+            <PlaceLimitOrderModal 
+                drawing={null} 
+                equity={1000} 
+                pricePrecision={5}
+                onPlace={() => {}} 
+                onCancel={() => {}}
+                onClose={() => {}} 
+            />
+        );
         expect(container).toBeTruthy();
     });
 });

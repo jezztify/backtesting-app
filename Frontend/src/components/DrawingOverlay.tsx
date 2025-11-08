@@ -2278,11 +2278,12 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
             border: '1px solid var(--color-accent)',
             borderRadius: 8,
             boxShadow: '0 4px 16px rgba(15, 23, 42, 0.35)',
-            padding: 16,
             width: '100%',
             height: '100%',
             boxSizing: 'border-box',
-            pointerEvents: 'auto'
+            pointerEvents: 'auto',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            overflow: 'hidden'
           }}>
             <PropertiesPanelModal
               drawingId={showPropertiesModal.drawingId}
@@ -2308,15 +2309,15 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
           <div style={{
             background: 'var(--color-panel)',
             color: 'var(--color-text)',
-            border: '1px solid var(--color-border-strong)',
+            border: '1px solid var(--color-accent)',
             borderRadius: 8,
-            padding: 12,
+            boxShadow: '0 4px 16px rgba(15, 23, 42, 0.35)',
             width: '100%',
             height: '100%',
             boxSizing: 'border-box',
             pointerEvents: 'auto',
             fontFamily: 'system-ui, -apple-system, sans-serif',
-            overflowY: 'auto'
+            overflow: 'hidden'
           }}>
             <PlaceLimitOrderModal
               drawing={drawings.find((d) => d.id === showTradeModal.drawingId) as PositionDrawing}
