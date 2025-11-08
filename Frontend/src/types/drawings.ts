@@ -22,6 +22,7 @@ export interface RectangleDrawing {
   end: ChartPoint;
   style: DrawingStyle & { fillColor: string; opacity: number; strokeOpacity: number };
   midline?: boolean; // If true, draw a midline through the rectangle
+  locked?: boolean; // If true, the drawing cannot be moved, resized, or deleted
   // Optional link to a trading order id created from this drawing
   linkedOrderId?: string;
 }
@@ -34,6 +35,7 @@ export interface VolumeProfileDrawing {
   buckets?: number; // number of price bins (overridden by rowSize if provided)
   // Number of rows (bins) to display. If set, overrides the `buckets` setting.
   rowCount?: number;
+  locked?: boolean; // If true, the drawing cannot be moved, resized, or deleted
   style: DrawingStyle & {
     fillColor?: string;
     strokeColor?: string;
@@ -53,6 +55,7 @@ export interface FibonacciDrawing {
   end: ChartPoint; // the other extreme
   // Optional custom level ratios (0..1). If omitted, default ratios will be used.
   levels?: number[];
+  locked?: boolean; // If true, the drawing cannot be moved, resized, or deleted
   style: DrawingStyle & { strokeColor?: string; lineWidth?: number; labelColor?: string; opacity?: number };
 }
 
@@ -64,6 +67,7 @@ export interface TrendlineDrawing {
   extendLeft: boolean;
   extendRight: boolean;
   style: DrawingStyle & { strokeColor: string; lineWidth: number };
+  locked?: boolean; // If true, the drawing cannot be moved, resized, or deleted
   // Optional link to a trading order id created from this drawing
   linkedOrderId?: string;
 }
@@ -88,6 +92,7 @@ export interface PositionDrawing {
   stopLoss?: number; // Stop loss price
   takeProfit?: number; // Take profit price
   style: PositionStyle;
+  locked?: boolean; // If true, the drawing cannot be moved, resized, or deleted
   // Optional link to a trading order id created from this drawing
   linkedOrderId?: string;
 }

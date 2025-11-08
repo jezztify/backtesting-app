@@ -127,6 +127,8 @@ interface DrawingState {
   updateFibonacciStyle: (id: string, style: Partial<FibonacciDrawing['style']>) => void;
   updateFibonacciLevels: (id: string, levels: number[] | undefined) => void;
   updatePositionStyle: (id: string, style: Partial<PositionDrawing['style']> & { stopLoss?: number; takeProfit?: number; entry?: number }) => void;
+  toggleLock: (id: string) => void;
+  setLocked: (id: string, locked: boolean) => void;
   deleteSelection: () => void;
   duplicateSelection: () => void;
   undo: () => void;
@@ -520,12 +522,42 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
         revision: state.revision + 1,
       };
     }),
+  toggleLock: (id: string) =>
+    set((state) => {
+      const drawing = state.drawings.find((d) => d.id === id);
+      if (!drawing) {
+        return state;
+      }
+      return {
+        drawings: state.drawings.map((d) =>
+          d.id === id ? { ...d, locked: !d.locked } : d
+        ),
+        revision: state.revision + 1,
+      };
+    }),
+  setLocked: (id: string, locked: boolean) =>
+    set((state) => {
+      const drawing = state.drawings.find((d) => d.id === id);
+      if (!drawing) {
+        return state;
+      }
+      return {
+        drawings: state.drawings.map((d) =>
+          d.id === id ? { ...d, locked } : d
+        ),
+        revision: state.revision + 1,
+      };
+    }),
   deleteSelection: () =>
     set((state) => {
       if (!state.selectionId) {
         return state;
       }
       const target = state.drawings.find((d) => d.id === state.selectionId);
+      // Prevent deletion of locked drawings
+      if (target?.locked) {
+        return state;
+      }
       // If the drawing is linked to an order and that order still exists, prevent deletion
       try {
         // Import trading store lazily to avoid circular import issues at module initialization

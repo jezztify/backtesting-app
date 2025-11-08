@@ -368,6 +368,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
     createHistoryCheckpoint,
     updateDrawingPoints,
     updatePositionStyle,
+    toggleLock,
   } = useDrawingStore((state) => ({
     activeTool: state.activeTool,
     drawings: state.drawings,
@@ -381,6 +382,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
     createHistoryCheckpoint: state.createHistoryCheckpoint,
     updateDrawingPoints: state.updateDrawingPoints,
     updatePositionStyle: state.updatePositionStyle,
+    toggleLock: state.toggleLock,
   }));
 
   // trading store will be used for placing limit orders from context menu
@@ -389,7 +391,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
   // subscribe to positions so we can lock drawings that have an associated order
   const tradingPositions = useTradingStore((s) => s.positions);
   const equity = useTradingStore((s) => s.equity);
-  const lockedDrawingIds = useMemo(() => new Set(tradingPositions.filter((p) => !!p.drawingId).map((p) => p.drawingId!)), [tradingPositions]);
+  const lockedDrawingIds = useMemo(() => new Set(Array.isArray(tradingPositions) ? tradingPositions.filter((p) => !!p.drawingId).map((p) => p.drawingId!) : []), [tradingPositions]);
 
   const canvasDrawings = useMemo(() => {
     return drawings
@@ -767,8 +769,8 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
   const hitTestHandles = useCallback(
     (canvasPoint: { x: number; y: number }): HandleHitResult | null => {
       for (const item of canvasDrawings) {
-        // skip handles for locked drawings (drawings with an associated order)
-        if (lockedDrawingIds.has(item.drawing.id)) continue;
+        // skip handles for locked drawings (drawings with an associated order or manually locked)
+        if (lockedDrawingIds.has(item.drawing.id) || item.drawing.locked) continue;
         if (isCanvasRectangle(item) || isCanvasVolumeProfile(item)) {
           const handlePositions = getRectangleHandlePositions(item.rect);
           for (const handle of RECTANGLE_HANDLES) {
@@ -844,11 +846,11 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
   );
 
   const hitTestDrawings = useCallback(
-    (canvasPoint: { x: number; y: number }) => {
+    (canvasPoint: { x: number; y: number }, allowLocked: boolean = false) => {
       for (let i = canvasDrawings.length - 1; i >= 0; i -= 1) {
         const item = canvasDrawings[i];
-        // If this drawing is locked to an order, do not allow hit-testing (prevents selection/move/resize)
-        if (lockedDrawingIds.has(item.drawing.id)) continue;
+        // If this drawing is locked (to an order or manually), skip it unless allowLocked is true (for right-click context menu)
+        if (!allowLocked && (lockedDrawingIds.has(item.drawing.id) || item.drawing.locked)) continue;
         if (isCanvasRectangle(item) || isCanvasVolumeProfile(item) || isCanvasFibonacci(item)) {
           if (isPointInRect(canvasPoint, item.rect)) {
             return item.drawing;
@@ -901,10 +903,10 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
   const handlePointerDown = useCallback(
     (event: PointerEvent<SVGSVGElement>) => {
       if (event.button === 2) {
-        // Right-click: show context menu if over a drawing
+        // Right-click: show context menu if over a drawing (allow locked drawings for unlock access)
         const canvasPoint = getPointerPosition(event);
         if (!canvasPoint) return;
-        const drawingHit = hitTestDrawings(canvasPoint);
+        const drawingHit = hitTestDrawings(canvasPoint, true); // Allow locked drawings for right-click
         if (drawingHit) {
           setContextMenu({ x: canvasPoint.x, y: canvasPoint.y, drawingId: drawingHit.id });
           event.preventDefault();
@@ -1066,10 +1068,13 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
       const y2 = Math.max(0, Math.min(height - modalHeight, contextMenu.y - 50));
       setShowTradeModal({ drawingId: contextMenu.drawingId, x: x2, y: y2, size: 1, riskPercent: 0.5 });
       setContextMenu(null);
+    } else if (action === 'toggleLock' && contextMenu) {
+      toggleLock(contextMenu.drawingId);
+      setContextMenu(null);
     } else {
       setContextMenu(null);
     }
-  }, [contextMenu, width, height]);
+  }, [contextMenu, width, height, toggleLock]);
 
   // Hide modal
   const handleCloseModal = useCallback(() => {
@@ -1573,7 +1578,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
                 );
               })}
 
-              {selectionId === drawing.id && (
+              {selectionId === drawing.id && !drawing.locked && (
                 (() => {
                   const handlePositions = getRectangleHandlePositions(item.rect);
                   return (
@@ -1590,6 +1595,19 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
                     </>
                   );
                 })()
+              )}
+              
+              {/* Show lock icon if drawing is locked */}
+              {drawing.locked && (
+                <text
+                  x={item.rect.x + item.rect.width - 20}
+                  y={item.rect.y + 20}
+                  fontSize="16"
+                  fill="var(--color-text)"
+                  style={{ pointerEvents: 'none', userSelect: 'none' }}
+                >
+                  🔒
+                </text>
               )}
             </g>
           );
@@ -1620,11 +1638,16 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
                   </text>
                 </g>
               ))}
-              {selectionId === drawing.id && (
+              {selectionId === drawing.id && !drawing.locked && (
                 <>
                   <circle cx={item.start.x} cy={item.start.y} r={HANDLE_RADIUS} className="handle" />
                   <circle cx={item.end.x} cy={item.end.y} r={HANDLE_RADIUS} className="handle" />
                 </>
+              )}
+              {drawing.locked && (
+                <text x={item.rect.x + item.rect.width - 20} y={item.rect.y + 20} fontSize="16" fill={drawing.style.strokeColor ?? '#f59e0b'}>
+                  🔒
+                </text>
               )}
             </g>
           );
@@ -1658,7 +1681,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
                   strokeDasharray="4 2"
                 />
               )}
-              {selectionId === drawing.id && (
+              {selectionId === drawing.id && !drawing.locked && (
                 (() => {
                   const handlePositions = getRectangleHandlePositions(item.rect);
                   return (
@@ -1675,6 +1698,11 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
                     </>
                   );
                 })()
+              )}
+              {drawing.locked && (
+                <text x={item.rect.x + item.rect.width - 20} y={item.rect.y + 20} fontSize="16" fill={drawing.style.strokeColor}>
+                  🔒
+                </text>
               )}
             </g>
           );
@@ -1824,7 +1852,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
               })()}
 
               {/* Selection handles - corners like rectangle (hidden when locked) */}
-              {selectionId === drawing.id && !hasLinkedOrder && (
+              {selectionId === drawing.id && !hasLinkedOrder && !drawing.locked && (
                 (() => {
                   const { left: leftX, right: rightX } = getPositionHandleXs(item.rect);
                   return (
@@ -1849,6 +1877,13 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
                     </>
                   );
                 })()
+              )}
+
+              {/* Lock icon indicator */}
+              {drawing.locked && (
+                <text x={item.rect.x + item.rect.width - 20} y={item.rect.y + 20} fontSize="16" fill={color}>
+                  🔒
+                </text>
               )}
 
               {/* Pending order visual */}
@@ -1893,11 +1928,22 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
               stroke={drawing.style.strokeColor}
               strokeWidth={drawing.style.lineWidth}
             />
-            {selectionId === drawing.id && (
+            {selectionId === drawing.id && !drawing.locked && (
               <>
                 <circle cx={trendlineItem.start.x} cy={trendlineItem.start.y} r={HANDLE_RADIUS} className="handle" />
                 <circle cx={trendlineItem.end.x} cy={trendlineItem.end.y} r={HANDLE_RADIUS} className="handle" />
               </>
+            )}
+            {drawing.locked && (
+              <text 
+                x={(trendlineItem.start.x + trendlineItem.end.x) / 2} 
+                y={(trendlineItem.start.y + trendlineItem.end.y) / 2 - 10} 
+                fontSize="16" 
+                fill={drawing.style.strokeColor}
+                textAnchor="middle"
+              >
+                🔒
+              </text>
             )}
           </g>
         );
@@ -2076,9 +2122,9 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
         <g style={{ pointerEvents: 'auto' }}>
           <foreignObject
             x={Math.max(0, Math.min(width - 130, contextMenu.x))}
-            y={Math.max(0, Math.min(height - 60, contextMenu.y))}
+            y={Math.max(0, Math.min(height - 100, contextMenu.y))}
             width={130}
-            height={60}
+            height={100}
             style={{ overflow: 'visible' }}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
@@ -2098,6 +2144,8 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
             >
               {(() => {
                 const drawing = drawings.find((d) => d.id === contextMenu.drawingId);
+                const isLocked = drawing?.locked || lockedDrawingIds.has(contextMenu.drawingId);
+                const isManuallyLocked = drawing?.locked === true;
                 return (
                   <>
                     <div
@@ -2128,9 +2176,38 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
                       Properties
                     </div>
 
+                    {/* Lock/Unlock option */}
+                    <div
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        handleContextMenuAction('toggleLock');
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'var(--color-button-hover)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'var(--color-panel)';
+                      }}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        padding: '8px 12px',
+                        background: 'var(--color-panel)',
+                        color: 'var(--color-text)',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        userSelect: 'none'
+                      }}
+                    >
+                      {isManuallyLocked ? '🔒 Unlock' : '🔓 Lock'}
+                    </div>
+
                     {/* Only show Create Order for position drawings (long/short) */}
                     {drawing && (drawing.type === 'long' || drawing.type === 'short') && (
-                      lockedDrawingIds.has(contextMenu.drawingId) ? (
+                      isLocked ? (
                         <div
                           style={{
                             display: 'block',
