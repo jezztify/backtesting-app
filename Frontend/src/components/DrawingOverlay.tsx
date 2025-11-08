@@ -33,6 +33,7 @@ interface DrawingOverlayProps {
   pricePrecision: number;
   panHandlers?: PanHandlers;
   aggregatedCandles?: Candle[];
+  baseTicks?: Candle[]; // Raw tick data (smallest timeframe) for volume profile calculations
   // Number of pixels reserved at the bottom for the chart time axis. When provided
   // the overlay will not cover that area so the axis remains visible and
   // interactive.
@@ -346,7 +347,7 @@ export const snapToNearestCandleLow = (time: number, candles?: Candle[]): number
   return best ? best.low : null;
 };
 
-const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision, panHandlers, aggregatedCandles, timeAxisHeight }: DrawingOverlayProps) => {
+const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision, panHandlers, aggregatedCandles, baseTicks, timeAxisHeight }: DrawingOverlayProps) => {
   const overlayRef = useRef<SVGSVGElement | null>(null);
   const [interaction, setInteraction] = useState<InteractionState>({ type: 'idle' });
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; drawingId: string } | null>(null);
@@ -536,7 +537,8 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
 
           if (rect.width <= 0 || rect.height <= 0) return null;
 
-          const sourceCandles = aggregatedCandles || [];
+          // Use baseTicks (raw tick data) for volume calculation if available, otherwise fall back to aggregatedCandles
+          const sourceCandles = baseTicks || aggregatedCandles || [];
           const minPrice = Math.min(vp.start.price, vp.end.price);
           const maxPrice = Math.max(vp.start.price, vp.end.price);
           const priceRange = Math.max(1e-12, maxPrice - minPrice);
@@ -707,15 +709,46 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
         } satisfies CanvasTrendline;
       })
       .filter((value): value is CanvasDrawing => value !== null);
-  }, [drawings, converters, width, height, renderTick, aggregatedCandles]);
+  }, [drawings, converters, width, height, renderTick, aggregatedCandles, baseTicks]);
 
   const handleDraftUpdate = useCallback(
     (point: ChartPoint, shiftKey: boolean) => {
       if (draft) {
-        // If drawing a volume profile, snap the draft endpoint price to the nearest candle high/low
+        // If drawing a volume profile, automatically detect highest and lowest prices in the range
         if (draft.type === 'volumeProfile') {
-          const snappedPrice = snapToNearestCandleHighLow(point.time, point.price, aggregatedCandles);
-          updateDraft({ time: point.time, price: snappedPrice });
+          const minT = Math.min(draft.start.time, point.time);
+          const maxT = Math.max(draft.start.time, point.time);
+          
+          // Use baseTicks for more granular price detection, fall back to aggregatedCandles
+          const sourceCandles = baseTicks || aggregatedCandles || [];
+          const candlesInRange = sourceCandles.filter(c => 
+            Number.isFinite(c.time) && c.time >= minT && c.time <= maxT
+          );
+          
+          if (candlesInRange.length > 0) {
+            // Find the actual highest high and lowest low in the time range
+            let minLow = Infinity;
+            let maxHigh = -Infinity;
+            for (const c of candlesInRange) {
+              if (Number.isFinite(c.low) && c.low < minLow) minLow = c.low;
+              if (Number.isFinite(c.high) && c.high > maxHigh) maxHigh = c.high;
+            }
+            
+            // Update draft with BOTH start and end prices to capture the full range
+            // The start point uses minLow, and the end point uses maxHigh
+            // We keep the original start.time and update to the new end point.time
+            useDrawingStore.setState({ 
+              draft: { 
+                ...draft, 
+                start: { time: draft.start.time, price: minLow },
+                end: { time: point.time, price: maxHigh }
+              }
+            });
+          } else {
+            // No candles in range, snap to nearest candle high/low at the endpoint
+            const snappedPrice = snapToNearestCandleHighLow(point.time, point.price, aggregatedCandles);
+            updateDraft({ time: point.time, price: snappedPrice });
+          }
           return;
         }
 
@@ -728,7 +761,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
         }
       }
     },
-    [draft, updateDraft, aggregatedCandles]
+    [draft, updateDraft, aggregatedCandles, baseTicks]
   );
 
   const hitTestHandles = useCallback(
@@ -1186,21 +1219,26 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
         }
 
         if (interaction.handle === 'start') {
-          // If resizing a volume profile, snap the start time/price and then recompute
-          // the vertical bounds (min low / max high) across the resulting time span
+          // If resizing a volume profile, auto-detect the vertical bounds (min low / max high) 
+          // across the resulting time span using baseTicks for highest precision
           if (drawing && drawing.type === 'volumeProfile') {
-            const newStart = { time: chartPoint.time, price: snapToNearestCandleHighLow(chartPoint.time, chartPoint.price, aggregatedCandles) };
+            const newStart = { time: chartPoint.time, price: chartPoint.price };
             const endPoint = drawing.end;
             const minT = Math.min(newStart.time, endPoint.time);
             const maxT = Math.max(newStart.time, endPoint.time);
-            const candlesInRange = (aggregatedCandles || []).filter(c => Number.isFinite(c.time) && c.time >= minT && c.time <= maxT);
+            
+            // Use baseTicks for more granular price detection, fall back to aggregatedCandles
+            const sourceCandles = baseTicks || aggregatedCandles || [];
+            const candlesInRange = sourceCandles.filter(c => Number.isFinite(c.time) && c.time >= minT && c.time <= maxT);
+            
             if (candlesInRange.length > 0) {
               const minLow = Math.min(...candlesInRange.map(c => c.low));
               const maxHigh = Math.max(...candlesInRange.map(c => c.high));
               updateDrawingPoints(interaction.drawingId, { start: { time: newStart.time, price: minLow }, end: { time: endPoint.time, price: maxHigh } }, { skipHistory: true });
             } else {
-              // fallback: just update start
-              updateDrawingPoints(interaction.drawingId, { start: newStart }, { skipHistory: true });
+              // fallback: just update start with snapped price
+              const snappedPrice = snapToNearestCandleHighLow(chartPoint.time, chartPoint.price, aggregatedCandles);
+              updateDrawingPoints(interaction.drawingId, { start: { time: newStart.time, price: snappedPrice } }, { skipHistory: true });
             }
           } else {
             updateDrawingPoints(interaction.drawingId, { start: chartPoint }, { skipHistory: true });
@@ -1209,21 +1247,26 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
         }
 
         if (interaction.handle === 'end') {
-          // If resizing a volume profile, snap the end time/price and then recompute
-          // the vertical bounds (min low / max high) across the resulting time span
+          // If resizing a volume profile, auto-detect the vertical bounds (min low / max high)
+          // across the resulting time span using baseTicks for highest precision
           if (drawing && drawing.type === 'volumeProfile') {
-            const newEnd = { time: chartPoint.time, price: snapToNearestCandleHighLow(chartPoint.time, chartPoint.price, aggregatedCandles) };
+            const newEnd = { time: chartPoint.time, price: chartPoint.price };
             const startPoint = drawing.start;
             const minT = Math.min(startPoint.time, newEnd.time);
             const maxT = Math.max(startPoint.time, newEnd.time);
-            const candlesInRange = (aggregatedCandles || []).filter(c => Number.isFinite(c.time) && c.time >= minT && c.time <= maxT);
+            
+            // Use baseTicks for more granular price detection, fall back to aggregatedCandles
+            const sourceCandles = baseTicks || aggregatedCandles || [];
+            const candlesInRange = sourceCandles.filter(c => Number.isFinite(c.time) && c.time >= minT && c.time <= maxT);
+            
             if (candlesInRange.length > 0) {
               const minLow = Math.min(...candlesInRange.map(c => c.low));
               const maxHigh = Math.max(...candlesInRange.map(c => c.high));
               updateDrawingPoints(interaction.drawingId, { start: { time: startPoint.time, price: minLow }, end: { time: newEnd.time, price: maxHigh } }, { skipHistory: true });
             } else {
-              // fallback: just update end
-              updateDrawingPoints(interaction.drawingId, { end: newEnd }, { skipHistory: true });
+              // fallback: just update end with snapped price
+              const snappedPrice = snapToNearestCandleHighLow(chartPoint.time, chartPoint.price, aggregatedCandles);
+              updateDrawingPoints(interaction.drawingId, { end: { time: newEnd.time, price: snappedPrice } }, { skipHistory: true });
             }
           } else {
             updateDrawingPoints(interaction.drawingId, { end: chartPoint }, { skipHistory: true });
@@ -1312,7 +1355,11 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
               if (drawing && drawing.type === 'volumeProfile') {
                 const startTime = newTime;
                 const endTime = interaction.originalEnd.time;
-                const candlesInRange = (aggregatedCandles || []).filter(c => Number.isFinite(c.time) && c.time >= Math.min(startTime, endTime) && c.time <= Math.max(startTime, endTime));
+                
+                // Use baseTicks for more granular price detection, fall back to aggregatedCandles
+                const sourceCandles = baseTicks || aggregatedCandles || [];
+                const candlesInRange = sourceCandles.filter(c => Number.isFinite(c.time) && c.time >= Math.min(startTime, endTime) && c.time <= Math.max(startTime, endTime));
+                
                 if (candlesInRange.length > 0) {
                   const minLow = Math.min(...candlesInRange.map(c => c.low));
                   const maxHigh = Math.max(...candlesInRange.map(c => c.high));
@@ -1340,7 +1387,11 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
               if (drawing && drawing.type === 'volumeProfile') {
                 const startTime = interaction.originalStart.time;
                 const endTime = newTime;
-                const candlesInRange = (aggregatedCandles || []).filter(c => Number.isFinite(c.time) && c.time >= Math.min(startTime, endTime) && c.time <= Math.max(startTime, endTime));
+                
+                // Use baseTicks for more granular price detection, fall back to aggregatedCandles
+                const sourceCandles = baseTicks || aggregatedCandles || [];
+                const candlesInRange = sourceCandles.filter(c => Number.isFinite(c.time) && c.time >= Math.min(startTime, endTime) && c.time <= Math.max(startTime, endTime));
+                
                 if (candlesInRange.length > 0) {
                   const minLow = Math.min(...candlesInRange.map(c => c.low));
                   const maxHigh = Math.max(...candlesInRange.map(c => c.high));
@@ -1376,7 +1427,9 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
             if (drawing && drawing.type === 'volumeProfile') {
               const minT = normalized.start.time;
               const maxT = normalized.end.time;
-              const candlesInRange = (aggregatedCandles || []).filter(c => Number.isFinite(c.time) && c.time >= minT && c.time <= maxT);
+              // Use baseTicks for most granular price detection
+              const sourceCandles = baseTicks || aggregatedCandles || [];
+              const candlesInRange = sourceCandles.filter(c => Number.isFinite(c.time) && c.time >= minT && c.time <= maxT);
               if (candlesInRange.length > 0) {
                 const minLow = Math.min(...candlesInRange.map(c => c.low));
                 const maxHigh = Math.max(...candlesInRange.map(c => c.high));
@@ -1399,7 +1452,7 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
         }
       }
     },
-    [converters, handleDraftUpdate, interaction, panHandlers, updateDrawingPoints, updatePositionStyle, modalDragging, handleModalDrag, drawings, aggregatedCandles]
+    [converters, handleDraftUpdate, interaction, panHandlers, updateDrawingPoints, updatePositionStyle, modalDragging, handleModalDrag, drawings, aggregatedCandles, baseTicks]
   );
 
   const handlePointerUp = useCallback(

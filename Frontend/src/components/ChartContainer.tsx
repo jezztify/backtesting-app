@@ -759,14 +759,13 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
             chartRef.current.timeScale().fitContent();
             hasInitializedRef.current = true;
             isUpdatingDataRef.current = false;
+            setRenderTick((tick) => tick + 1);
           }
         }, 50);
       } else {
-        // Allow render ticks after a brief delay to ensure the range is fully restored
-        setTimeout(() => {
-          isUpdatingDataRef.current = false;
-          setRenderTick((tick) => tick + 1);
-        }, 50);
+        // Update immediately during playback to prevent stuttering
+        isUpdatingDataRef.current = false;
+        setRenderTick((tick) => tick + 1);
       }
       prevVisibleCandlesCountRef.current = visibleTimeframeCandlesCount;
     } else {
@@ -897,6 +896,7 @@ const ChartContainer = ({ candles = [], baseTicks = [], baseTimeframe, playbackI
             pricePrecision={priceFormat.precision}
             renderTick={renderTick}
             aggregatedCandles={aggregatedCandlesMemo}
+            baseTicks={baseTicks}
             panHandlers={panHandlers}
             timeAxisHeight={TIME_AXIS_HEIGHT}
           />
