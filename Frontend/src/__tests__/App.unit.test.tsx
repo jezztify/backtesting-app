@@ -103,11 +103,14 @@ vi.mock('../hooks/useTheme', () => ({
   useTheme: () => ({ preference: 'light', setPreference: vi.fn(), effectiveTheme: 'light' }),
 }));
 
+const clearAllMock = vi.fn();
+
 vi.mock('../state/drawingStore', () => ({
-  useDrawingStore: () => ({
+  useDrawingStore: (selector: any) => selector({
     drawings: [],
     setDatasetId: vi.fn(),
     loadSnapshot: vi.fn(),
+    clearAll: clearAllMock,
   }),
 }));
 
@@ -138,6 +141,8 @@ describe('App component', () => {
     (global as any).__lastScrollToIndex = undefined;
     (global as any).__lastCenterPrice = undefined;
     (global as any).__playbackProps = undefined;
+    // clear mock call history
+    clearAllMock.mockClear();
   });
 
   it('renders workspace and can switch to marketData view and back', async () => {
@@ -191,5 +196,18 @@ describe('App component', () => {
     // After reset, chart container still present and playback controls exist
     expect(await screen.findByTestId('chart-container')).toBeInTheDocument();
     expect(await screen.findByTestId('playback-controls')).toBeInTheDocument();
+  });
+
+  it('clears all drawings when new market data is loaded', async () => {
+    render(<App />);
+
+    // Click data loader to trigger dataset load
+    const loadBtn = await screen.findByTestId('data-loader');
+    act(() => {
+      fireEvent.click(loadBtn);
+    });
+
+    // Verify clearAll was called when data was loaded
+    expect(clearAllMock).toHaveBeenCalled();
   });
 });

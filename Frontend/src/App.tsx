@@ -123,6 +123,7 @@ const App = () => {
   const drawings = useDrawingStore((state) => state.drawings);
   const setDatasetIdInStore = useDrawingStore((state) => state.setDatasetId);
   const loadSnapshot = useDrawingStore((state) => state.loadSnapshot);
+  const clearAllDrawings = useDrawingStore((state) => state.clearAll);
 
   // Calculate display candles based on tick playback
   // When useTickPlayback is enabled, aggregate ticks up to playbackIndex in real-time
@@ -377,6 +378,9 @@ const App = () => {
   }, [candles.length, tickSourceData, useTickPlayback]);
 
   const handleDatasetLoaded = (label: string, data: Candle[], detectedTimeframe: Timeframe) => {
+    // Clear all drawings when new market data is loaded
+    clearAllDrawings();
+    
     const sortedData = [...data].sort((a, b) => a.time - b.time);
     const targetLabel = label.trim() || 'Imported dataset';
     const newId = buildDatasetId(targetLabel);
