@@ -1218,6 +1218,9 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
               const snappedPrice = snapToNearestCandleHighLow(chartPoint.time, chartPoint.price, aggregatedCandles);
               updateDrawingPoints(interaction.drawingId, { start: { time: newStart.time, price: snappedPrice } }, { skipHistory: true });
             }
+          } else if (drawing && drawing.type === 'trendline' && event.shiftKey) {
+            // If shift is held while resizing a trendline start handle, keep it horizontal (same price as end)
+            updateDrawingPoints(interaction.drawingId, { start: { time: chartPoint.time, price: drawing.end.price } }, { skipHistory: true });
           } else {
             updateDrawingPoints(interaction.drawingId, { start: chartPoint }, { skipHistory: true });
           }
@@ -1246,6 +1249,9 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
               const snappedPrice = snapToNearestCandleHighLow(chartPoint.time, chartPoint.price, aggregatedCandles);
               updateDrawingPoints(interaction.drawingId, { end: { time: newEnd.time, price: snappedPrice } }, { skipHistory: true });
             }
+          } else if (drawing && drawing.type === 'trendline' && event.shiftKey) {
+            // If shift is held while resizing a trendline end handle, keep it horizontal (same price as start)
+            updateDrawingPoints(interaction.drawingId, { end: { time: chartPoint.time, price: drawing.start.price } }, { skipHistory: true });
           } else {
             updateDrawingPoints(interaction.drawingId, { end: chartPoint }, { skipHistory: true });
           }
