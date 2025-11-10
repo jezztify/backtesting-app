@@ -261,8 +261,6 @@ interface CanvasVolumeProfile extends CanvasDrawingBase {
     downVolume: number;
     upRatio: number;
     downRatio: number;
-    y1: number;
-    y2: number;
   }>;
 }
 
@@ -578,38 +576,13 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
           for (let i = 0; i < buckets; i++) {
             const priceBottom = minPrice + i * binHeightPrice;
             const priceTop = minPrice + (i + 1) * binHeightPrice;
-            let topCanvas = converters.toCanvas({ time: vp.start.time, price: priceTop });
-            let bottomCanvas = converters.toCanvas({ time: vp.start.time, price: priceBottom });
-            
-            // If conversion fails (price outside visible range), clamp to canvas boundaries
-            // This ensures all bins are rendered even when partially outside the visible range
-            if (!topCanvas) {
-              // Price is outside visible range - clamp to top (y=0) or bottom (y=height) of canvas
-              // Higher prices map to lower y values (inverted), so if priceTop is too high, y should be 0
-              topCanvas = { x: start.x, y: priceTop > maxPrice ? 0 : height };
-            }
-            if (!bottomCanvas) {
-              bottomCanvas = { x: start.x, y: priceBottom > maxPrice ? 0 : height };
-            }
-            
-            const y1 = Math.min(topCanvas.y, bottomCanvas.y);
-            const y2 = Math.max(topCanvas.y, bottomCanvas.y);
-            
-            // Skip bins that are completely outside the canvas (but keep those partially visible)
-            if (y2 < 0 || y1 > height) {
-              continue;
-            }
-            
-            // Clamp to canvas boundaries
-            const clampedY1 = Math.max(0, Math.min(height, y1));
-            const clampedY2 = Math.max(0, Math.min(height, y2));
             
             const upVol = upVolumes[i] || 0;
             const downVol = downVolumes[i] || 0;
             const total = upVol + downVol;
             const upRatio = upVol / maxTotal;
             const downRatio = downVol / maxTotal;
-            bins.push({ priceTop, priceBottom, volume: total, upVolume: upVol, downVolume: downVol, upRatio, downRatio, y1: clampedY1, y2: clampedY2 });
+            bins.push({ priceTop, priceBottom, volume: total, upVolume: upVol, downVolume: downVol, upRatio, downRatio });
           }
 
           return {
@@ -1538,14 +1511,36 @@ const DrawingOverlay = ({ width, height, converters, renderTick, pricePrecision,
             <g key={drawing.id} filter={selectionId === drawing.id ? 'url(#selection-shadow)' : undefined}>
               {/* Render volume profile bins as horizontal bars anchored to the right side of the rect */}
               {item.bins.map((bin, i) => {
+                // Calculate y-coordinates dynamically on each render to handle panning correctly
+                let topCanvas = converters.toCanvas({ time: drawing.start.time, price: bin.priceTop });
+                let bottomCanvas = converters.toCanvas({ time: drawing.start.time, price: bin.priceBottom });
+                
+                // If conversion fails (price outside visible range), clamp to canvas boundaries
+                if (!topCanvas) {
+                  topCanvas = { x: item.start.x, y: bin.priceTop > Math.max(drawing.start.price, drawing.end.price) ? 0 : height };
+                }
+                if (!bottomCanvas) {
+                  bottomCanvas = { x: item.start.x, y: bin.priceBottom > Math.max(drawing.start.price, drawing.end.price) ? 0 : height };
+                }
+                
+                const y1 = Math.min(topCanvas.y, bottomCanvas.y);
+                const y2 = Math.max(topCanvas.y, bottomCanvas.y);
+                
+                // Skip bins that are completely outside the canvas
+                if (y2 < 0 || y1 > height) {
+                  return null;
+                }
+                
+                // Clamp to canvas boundaries
+                const barY = Math.max(0, Math.min(height, y1));
+                const barH = Math.max(1, Math.max(0, Math.min(height, y2)) - barY);
+                
                 const upWidth = Math.max(0, Math.round(bin.upRatio * item.rect.width));
                 const downWidth = Math.max(0, Math.round(bin.downRatio * item.rect.width));
                 // Render from left -> right: down segment first (at left), then up segment to its right
                 const leftX = item.rect.x;
                 const downX = leftX;
                 const upX = leftX + downWidth;
-                const barY = bin.y1;
-                const barH = Math.max(1, bin.y2 - bin.y1);
                 return (
                   <g key={i}>
                     {downWidth > 0 && (
